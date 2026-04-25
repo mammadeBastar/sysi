@@ -115,6 +115,11 @@ var controlledSystemFiles = []string{
 	"system/data/schema.sql",
 }
 
+var implementationOpenSpecTargets = []string{
+	"frontend",
+	"backend",
+}
+
 //go:embed templates/agents/codex/*/SKILL.md templates/agents/cursor/sys-orchestrator.mdc templates/agents/claude/CLAUDE.section.md
 var agentTemplates embed.FS
 
@@ -193,6 +198,9 @@ func (a *App) init() error {
 		return err
 	}
 	if root, ok := findRoot(start); ok {
+		if err := a.ensureImplementationOpenSpec(root); err != nil {
+			return err
+		}
 		fmt.Fprintf(a.opts.Stdout, "sys already initialized at %s\n", root)
 		return nil
 	}
@@ -223,6 +231,9 @@ func (a *App) init() error {
 		return err
 	}
 	if err := scaffoldSystem(root); err != nil {
+		return err
+	}
+	if err := a.ensureImplementationOpenSpec(root); err != nil {
 		return err
 	}
 
@@ -395,21 +406,28 @@ func (a *App) change(args []string) error {
 	if state.Phase != PhaseBuild {
 		return errors.New("build changes require build phase; run sys design freeze first")
 	}
+	openSpecDir, err := a.requireImplementationOpenSpecDir(root)
+	if err != nil {
+		return err
+	}
 
 	action, name := args[0], args[1]
 	switch action {
 	case "propose":
-		if err := a.runOpenSpec(root, "new", "change", name); err != nil {
+		if err := a.runOpenSpec(openSpecDir, "new", "change", name); err != nil {
 			return err
 		}
 		fmt.Fprintf(a.opts.Stdout, "OpenSpec change proposed: %s\n", name)
 	case "apply":
-		if _, err := os.Stat(filepath.Join(root, "openspec", "changes", name)); err != nil {
+		if _, err := os.Stat(filepath.Join(openSpecDir, "openspec", "changes", name)); err != nil {
 			return fmt.Errorf("OpenSpec change %q not found", name)
 		}
-		fmt.Fprintf(a.opts.Stdout, "Apply %s with openspec-apply and Superpowers verification discipline.\n", name)
+		if err := a.runOpenSpec(openSpecDir, "instructions", "apply", "--change", name, "--json"); err != nil {
+			return err
+		}
+		fmt.Fprintf(a.opts.Stdout, "OpenSpec apply instructions loaded for %s; continue implementation through OpenSpec apply and Superpowers discipline.\n", name)
 	case "archive":
-		if err := a.runOpenSpec(root, "archive", name); err != nil {
+		if err := a.runOpenSpec(openSpecDir, "archive", name); err != nil {
 			return err
 		}
 		fmt.Fprintf(a.opts.Stdout, "OpenSpec change archived: %s\n", name)
@@ -613,6 +631,32 @@ func writeFileIfMissing(path, content string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func (a *App) requireImplementationOpenSpecDir(root string) (string, error) {
+	switch inferRole(root, a.opts.Dir) {
+	case RoleFrontend:
+		return filepath.Join(root, "frontend"), nil
+	case RoleBackend:
+		return filepath.Join(root, "backend"), nil
+	default:
+		return "", errors.New("build changes require an implementation workspace; run from frontend/ or backend/")
+	}
+}
+
+func (a *App) ensureImplementationOpenSpec(root string) error {
+	for _, target := range implementationOpenSpecTargets {
+		if err := os.MkdirAll(filepath.Join(root, target), 0o755); err != nil {
+			return err
+		}
+		if exists(filepath.Join(root, target, "openspec", "config.yaml")) {
+			continue
+		}
+		if err := a.runOpenSpec(root, "init", target, "--tools", "none"); err != nil {
+			return fmt.Errorf("initialize OpenSpec for %s: %w", target, err)
+		}
+	}
+	return nil
 }
 
 func defaultAllowlists() map[string][]string {

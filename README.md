@@ -142,6 +142,8 @@ This creates:
 ```text
 .sys-orchestrator/
 system/
+frontend/openspec/
+backend/openspec/
 ```
 
 Check project status:
@@ -199,12 +201,13 @@ A sys-initialized repository contains:
 │   ├── modules/
 │   ├── data/
 │   └── obs/
-├── openspec/
 ├── frontend/
+│   └── openspec/
 └── backend/
+    └── openspec/
 ```
 
-Only `.sys-orchestrator/` and `system/` are created by `sys init`. Application directories such as `frontend/` and `backend/` are project-specific.
+`sys init` creates `.sys-orchestrator/`, `system/`, and the `frontend/` and `backend/` implementation directories when they are missing. It runs non-interactive OpenSpec initialization inside `frontend/` and `backend/` only. The monorepo root and `/system` are not initialized as OpenSpec workspaces by `sys init`.
 
 ### `.sys-orchestrator/`
 
@@ -396,7 +399,7 @@ system/data/schema.sql
 
 ## Build Phase
 
-Build phase uses OpenSpec for implementation changes.
+Build phase uses OpenSpec for implementation changes. Run build change commands from the implementation workspace that owns the work, either `frontend/` or `backend/`. The sys CLI still discovers the monorepo root from those directories, but it runs OpenSpec in the inferred implementation workspace.
 
 Before using build commands, freeze the design:
 
@@ -407,10 +410,11 @@ sys design freeze
 ### Propose A Change
 
 ```bash
+cd frontend
 sys change propose add-login
 ```
 
-This requires build phase and invokes:
+This requires build phase and invokes OpenSpec from the current implementation workspace:
 
 ```bash
 openspec new change add-login
@@ -425,20 +429,28 @@ SYS_OPENSPEC=/path/to/openspec sys change propose add-login
 ### Apply A Change
 
 ```bash
+cd frontend
 sys change apply add-login
 ```
 
-This checks that `openspec/changes/add-login` exists and prints guidance to apply the change through OpenSpec apply semantics and Superpowers verification discipline.
+This checks that `frontend/openspec/changes/add-login` exists, invokes from the frontend workspace:
 
-In Codex, the richer path is to use the generated `sys-apply` skill, which points the agent at OpenSpec apply and Superpowers methods.
+```bash
+openspec instructions apply --change add-login --json
+```
+
+and reports that implementation must continue through OpenSpec apply plus Superpowers discipline.
+
+In Codex, use the generated `sys-apply` skill. It requires the local OpenSpec apply workflow, `openspec-apply-change`, before implementation edits and requires Superpowers methods for planning, TDD, debugging, and verification.
 
 ### Archive A Change
 
 ```bash
+cd frontend
 sys change archive add-login
 ```
 
-This requires build phase and invokes:
+This requires build phase and invokes OpenSpec archive from the current implementation workspace:
 
 ```bash
 openspec archive add-login
@@ -497,7 +509,7 @@ The installed Codex skills are:
 | --- | --- |
 | `sys-explore` | Explore design questions from `/system`, surface candidate decisions, and avoid OpenSpec during design phase |
 | `sys-capture` | Write finalized design decisions into the right `/system` files and create decision records |
-| `sys-apply` | Apply OpenSpec changes in build phase while using Superpowers-style implementation discipline |
+| `sys-apply` | Apply OpenSpec changes in build phase by invoking OpenSpec apply first, then using mandatory Superpowers implementation discipline |
 | `sys-design-change` | Mutate controlled or frozen `/system` truth during build phase only after explicit confirmation |
 
 Typical Codex usage:
@@ -624,9 +636,9 @@ Initializes a repo-local sys project.
 sys init
 ```
 
-Creates `.sys-orchestrator/`, scaffolds `/system`, records `design` phase, and prints the next command.
+Creates `.sys-orchestrator/`, scaffolds `/system`, creates `frontend/` and `backend/` when missing, initializes OpenSpec inside `frontend/` and `backend/`, records `design` phase, and prints the next command.
 
-Running it again preserves existing state and reports that the project is already initialized.
+Running it again preserves existing state, reports that the project is already initialized, and ensures the frontend/backend OpenSpec workspaces still exist. Targets that already contain `openspec/config.yaml` are skipped.
 
 ### `sys status`
 
@@ -703,7 +715,7 @@ sys design-change change-auth-boundary
 
 ### `sys change propose <name>`
 
-Requires build phase. Invokes OpenSpec to create a change.
+Requires build phase and must be run from `frontend/` or `backend/`. Invokes OpenSpec in that implementation workspace to create a change.
 
 ```bash
 sys change propose add-login
@@ -711,7 +723,7 @@ sys change propose add-login
 
 ### `sys change apply <name>`
 
-Requires build phase and an existing OpenSpec change directory. Prints apply guidance.
+Requires build phase and must be run from `frontend/` or `backend/`. Checks for the OpenSpec change in that implementation workspace, invokes the OpenSpec apply instruction workflow there, and prints the required OpenSpec apply plus Superpowers handoff.
 
 ```bash
 sys change apply add-login
@@ -719,7 +731,7 @@ sys change apply add-login
 
 ### `sys change archive <name>`
 
-Requires build phase. Invokes OpenSpec archive.
+Requires build phase and must be run from `frontend/` or `backend/`. Invokes OpenSpec archive in that implementation workspace.
 
 ```bash
 sys change archive add-login
@@ -791,7 +803,7 @@ sys design-change <name>
 
 ### `openspec executable not found`
 
-Build change commands that invoke OpenSpec require the `openspec` executable.
+`sys init` and build change commands that invoke OpenSpec require the `openspec` executable.
 
 Either put `openspec` on `PATH`, or set:
 
