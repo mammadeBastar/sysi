@@ -1,36 +1,36 @@
 ## Purpose
 
-Define `README.md` as the complete project documentation surface for Sys Orchestrator users, contributors, and agents.
+Define `README.md` as the complete project documentation surface for Sysi users, contributors, and agents.
 
 ## Requirements
 
 ### Requirement: README Provides Complete Project Overview
-The README SHALL explain what Sys Orchestrator is, what problem it solves, and how `/system`, OpenSpec, and Superpowers cooperate.
+The README SHALL explain what Sysi is, what problem it solves, and how `/system`, OpenSpec, and Superpowers cooperate.
 
 #### Scenario: New reader opens README
 - **WHEN** a new reader opens `README.md`
 - **THEN** they can understand the project purpose, core mental model, and lifecycle without reading archived OpenSpec changes
 
 ### Requirement: README Documents Installation And Running From Source
-The README SHALL document how to run the CLI from source and how to use the installed `sys` command form.
+The README SHALL document how to run the CLI from source and how to use the installed `sysi` command form.
 
 #### Scenario: User wants to run the CLI locally
 - **WHEN** a user reads the installation section
-- **THEN** they find copy-pasteable examples for `go run ./cmd/sys --help` and `go run ./cmd/sys <command>`
+- **THEN** they find copy-pasteable examples for `go run ./cmd/sysi --help` and `go run ./cmd/sysi <command>`
 
 ### Requirement: README Documents Design Phase Workflow
 The README SHALL document design-phase commands and explain that OpenSpec is not used for design decisions.
 
 #### Scenario: User wants to design a system
 - **WHEN** a user reads the design phase section
-- **THEN** they find the intended flow for `sys explore`, `sys capture`, decision records, and `sys design freeze`
+- **THEN** they find the intended flow for `sysi explore`, `sysi capture`, decision records, and `sysi design freeze`
 
 ### Requirement: README Documents Build Phase Workflow
 The README SHALL document build-phase commands and explain the OpenSpec and Superpowers responsibilities.
 
 #### Scenario: User wants to implement a feature
 - **WHEN** a user reads the build phase section
-- **THEN** they find how `sys change propose`, `sys change apply`, `sys change archive`, and `sys design-change` fit together
+- **THEN** they find how `sysi change propose`, `sysi change apply`, `sysi change archive`, and `sysi design-change` fit together
 
 ### Requirement: README Documents System Foundation Structure
 The README SHALL document the canonical `/system` tree and the role of key files.

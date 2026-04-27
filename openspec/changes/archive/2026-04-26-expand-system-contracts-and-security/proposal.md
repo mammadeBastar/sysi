@@ -26,8 +26,8 @@ The current `/system` scaffold has the right shape, but its contract surface is 
 
 ## Impact
 
-- Affected CLI code: `internal/sysapp/app.go`.
-- Affected tests: `internal/sysapp/app_test.go`.
-- Affected generated skills and agent instructions: `internal/sysapp/templates/agents/**`.
+- Affected CLI code: `internal/sysiapp/app.go`.
+- Affected tests: `internal/sysiapp/app_test.go`.
+- Affected generated skills and agent instructions: `internal/sysiapp/templates/agents/**`.
 - Affected docs: `README.md`.
 - No external dependencies or runtime services are introduced.

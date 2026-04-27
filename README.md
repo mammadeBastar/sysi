@@ -1,6 +1,6 @@
-# Sys Orchestrator
+# Sysi
 
-`sys` is a Go CLI for an agent-native monorepo workflow.
+`sysi` is a Go CLI for an agent-native monorepo workflow.
 
 It gives agents and humans a durable system foundation before implementation starts. During design, decisions are captured directly into `/system`. During build, implementation changes flow through OpenSpec, while apply work is shaped by Superpowers-style planning, testing, debugging, and verification discipline.
 
@@ -10,10 +10,10 @@ The short version:
 /system      = ratified system truth
 OpenSpec     = build-phase change protocol
 Superpowers  = apply-phase engineering discipline
-sys          = CLI that ties those pieces together
+sysi          = CLI that ties those pieces together
 ```
 
-`sys` is intentionally pragmatic. It does not try to become a replacement for OpenSpec, a full documentation generator, or a hard filesystem sandbox. It gives the repository a clear lifecycle, a canonical system folder, validation, phase boundaries, and agent-native instructions.
+`sysi` is intentionally pragmatic. It does not try to become a replacement for OpenSpec, a full documentation generator, or a hard filesystem sandbox. It gives the repository a clear lifecycle, a canonical system folder, validation, phase boundaries, and agent-native instructions.
 
 ## Table Of Contents
 
@@ -34,7 +34,7 @@ sys          = CLI that ties those pieces together
 
 ## Mental Model
 
-Most agent-driven projects lose context between conversations. Sys Orchestrator solves that by making the project foundation explicit and durable.
+Most agent-driven projects lose context between conversations. Sysi solves that by making the project foundation explicit and durable.
 
 ```text
 Design conversations
@@ -65,7 +65,7 @@ Design phase is direct and decisive. Build phase is controlled and transactional
 
 ## Project Lifecycle
 
-Sys projects move through two primary phases.
+Sysi projects move through two primary phases.
 
 ### Phase 1: Design
 
@@ -76,32 +76,32 @@ OpenSpec is intentionally not used for design decisions in this phase. The base 
 Typical flow:
 
 ```bash
-sys init
-sys status
-sys explore auth
-sys capture
-sys design freeze
+sysi init
+sysi status
+sysi explore auth
+sysi capture
+sysi design freeze
 ```
 
 ### Phase 2: Build
 
-Build phase starts after `sys design freeze`. At this point, `/system` becomes controlled. Normal implementation work should go through OpenSpec.
+Build phase starts after `sysi design freeze`. At this point, `/system` becomes controlled. Normal implementation work should go through OpenSpec.
 
 Typical flow:
 
 ```bash
-sys change propose add-login
-sys change apply add-login
-sys change archive add-login
+sysi change propose add-login
+sysi change apply add-login
+sysi change archive add-login
 ```
 
 If a build task reveals that a foundational system decision must change, use:
 
 ```bash
-sys design-change change-auth-boundary
+sysi design-change change-auth-boundary
 ```
 
-Normal `sys capture` is blocked in build phase.
+Normal `sysi capture` is blocked in build phase.
 
 ## Install And Run
 
@@ -110,21 +110,21 @@ This repository is a Go module.
 Run from source:
 
 ```bash
-go run ./cmd/sys --help
-go run ./cmd/sys <command>
+go run ./cmd/sysi --help
+go run ./cmd/sysi <command>
 ```
 
 Build a local binary:
 
 ```bash
-go build -o sys ./cmd/sys
-./sys --help
+go build -o sysi ./cmd/sysi
+./sysi --help
 ```
 
-If `sys` is installed on your `PATH`, use:
+If `sysi` is installed on your `PATH`, use:
 
 ```bash
-sys <command>
+sysi <command>
 ```
 
 The CLI uses only the Go standard library in v1.
@@ -134,13 +134,13 @@ The CLI uses only the Go standard library in v1.
 Initialize a repository:
 
 ```bash
-sys init
+sysi init
 ```
 
 This creates:
 
 ```text
-.sys-orchestrator/
+.sysi/
 system/
 frontend/openspec/
 backend/openspec/
@@ -149,46 +149,46 @@ backend/openspec/
 Check project status:
 
 ```bash
-sys status
+sysi status
 ```
 
 Start design work:
 
 ```bash
-sys explore auth
+sysi explore auth
 ```
 
 Capture finalized decisions:
 
 ```bash
-sys capture
+sysi capture
 ```
 
 Freeze the design foundation:
 
 ```bash
-sys design freeze
+sysi design freeze
 ```
 
 Install Codex integration:
 
 ```bash
-sys agent install codex
+sysi agent install codex
 ```
 
 Validate the system foundation:
 
 ```bash
-sys validate
+sysi validate
 ```
 
 ## Repository Layout
 
-A sys-initialized repository contains:
+A sysi-initialized repository contains:
 
 ```text
 .
-├── .sys-orchestrator/
+├── .sysi/
 │   ├── state.json
 │   ├── freeze.json
 │   ├── allowlists.json
@@ -208,11 +208,11 @@ A sys-initialized repository contains:
     └── openspec/
 ```
 
-`sys init` creates `.sys-orchestrator/`, `system/`, and the `frontend/` and `backend/` implementation directories when they are missing. It runs non-interactive OpenSpec initialization inside `frontend/` and `backend/` only. The monorepo root and `/system` are not initialized as OpenSpec workspaces by `sys init`.
+`sysi init` creates `.sysi/`, `system/`, and the `frontend/` and `backend/` implementation directories when they are missing. It runs non-interactive OpenSpec initialization inside `frontend/` and `backend/` only. The monorepo root and `/system` are not initialized as OpenSpec workspaces by `sysi init`.
 
-### `.sys-orchestrator/`
+### `.sysi/`
 
-`.sys-orchestrator/` stores repo-local operational state.
+`.sysi/` stores repo-local operational state.
 
 | File | Purpose |
 | --- | --- |
@@ -228,7 +228,7 @@ This is machine state. The architectural truth belongs in `/system`.
 
 `/system` is the canonical project foundation. It is designed for agents and humans to read before they build.
 
-`sys init` scaffolds:
+`sysi init` scaffolds:
 
 ```text
 system/
@@ -348,12 +348,12 @@ Design phase is for creating and refining the foundation.
 
 ### Explore
 
-Use `sys explore` to print design-agent guidance based on the current project state.
+Use `sysi explore` to print design-agent guidance based on the current project state.
 
 ```bash
-sys explore
-sys explore auth
-sys explore "billing events"
+sysi explore
+sysi explore auth
+sysi explore "billing events"
 ```
 
 The command reports:
@@ -376,10 +376,10 @@ Role is inferred from the current working directory:
 
 ### Capture
 
-Use `sys capture` after a decision is finalized.
+Use `sysi capture` after a decision is finalized.
 
 ```bash
-sys capture
+sysi capture
 ```
 
 The CLI prints capture rules. The active agent should then:
@@ -395,14 +395,14 @@ A decision record should include:
 - rationale
 - affected files
 
-During build phase, `sys capture` fails and directs users to `sys design-change`.
+During build phase, `sysi capture` fails and directs users to `sysi design-change`.
 
 ### Freeze
 
 Freeze the design foundation when the project is ready for build work:
 
 ```bash
-sys design freeze
+sysi design freeze
 ```
 
 This sets the phase to `build` and records hash baselines for controlled files:
@@ -422,19 +422,19 @@ system/data/schema.sql
 
 ## Build Phase
 
-Build phase uses OpenSpec for implementation changes. Run build change commands from the implementation workspace that owns the work, either `frontend/` or `backend/`. The sys CLI still discovers the monorepo root from those directories, but it runs OpenSpec in the inferred implementation workspace.
+Build phase uses OpenSpec for implementation changes. Run build change commands from the implementation workspace that owns the work, either `frontend/` or `backend/`. The sysi CLI still discovers the monorepo root from those directories, but it runs OpenSpec in the inferred implementation workspace.
 
 Before using build commands, freeze the design:
 
 ```bash
-sys design freeze
+sysi design freeze
 ```
 
 ### Propose A Change
 
 ```bash
 cd frontend
-sys change propose add-login
+sysi change propose add-login
 ```
 
 This requires build phase and invokes OpenSpec from the current implementation workspace:
@@ -446,14 +446,14 @@ openspec new change add-login
 If the `openspec` executable is not on `PATH`, set:
 
 ```bash
-SYS_OPENSPEC=/path/to/openspec sys change propose add-login
+SYSI_OPENSPEC=/path/to/openspec sysi change propose add-login
 ```
 
 ### Apply A Change
 
 ```bash
 cd frontend
-sys change apply add-login
+sysi change apply add-login
 ```
 
 This checks that `frontend/openspec/changes/add-login` exists, invokes from the frontend workspace:
@@ -464,13 +464,13 @@ openspec instructions apply --change add-login --json
 
 and reports that implementation must continue through OpenSpec apply plus Superpowers discipline.
 
-In Codex, use the generated `sys-apply` skill. It requires the local OpenSpec apply workflow, `openspec-apply-change`, before implementation edits and requires Superpowers methods for planning, TDD, debugging, and verification.
+In Codex, use the generated `sysi-apply` skill. It requires the local OpenSpec apply workflow, `openspec-apply-change`, before implementation edits and requires Superpowers methods for planning, TDD, debugging, and verification.
 
 ### Archive A Change
 
 ```bash
 cd frontend
-sys change archive add-login
+sysi change archive add-login
 ```
 
 This requires build phase and invokes OpenSpec archive from the current implementation workspace:
@@ -484,7 +484,7 @@ openspec archive add-login
 If build work reveals that `/system` itself must change, use:
 
 ```bash
-sys design-change change-auth-boundary
+sysi design-change change-auth-boundary
 ```
 
 This prints the required design-change guidance:
@@ -503,22 +503,22 @@ Agent integration is installed once per project. Runtime role is inferred from t
 Codex is the first-class v1 integration.
 
 ```bash
-sys agent install codex
+sysi agent install codex
 ```
 
 This creates:
 
 ```text
-.codex/skills/sys-explore/SKILL.md
-.codex/skills/sys-capture/SKILL.md
-.codex/skills/sys-apply/SKILL.md
-.codex/skills/sys-design-change/SKILL.md
+.codex/skills/sysi-explore/SKILL.md
+.codex/skills/sysi-capture/SKILL.md
+.codex/skills/sysi-apply/SKILL.md
+.codex/skills/sysi-design-change/SKILL.md
 ```
 
 These are full instruction packs, not placeholder files. Each skill includes:
 
 - purpose and when to use it
-- initial `sys status` checks
+- initial `sysi status` checks
 - phase rules for design and build work
 - role and `/system` file-access guidance
 - workflow steps
@@ -530,24 +530,24 @@ The installed Codex skills are:
 
 | Skill | Purpose |
 | --- | --- |
-| `sys-explore` | Explore design questions from `/system`, surface candidate decisions, and avoid OpenSpec during design phase |
-| `sys-capture` | Write finalized design decisions into the right `/system` files and create decision records |
-| `sys-apply` | Apply OpenSpec changes in build phase by invoking OpenSpec apply first, then using mandatory Superpowers implementation discipline |
-| `sys-design-change` | Mutate controlled or frozen `/system` truth during build phase only after explicit confirmation |
+| `sysi-explore` | Explore design questions from `/system`, surface candidate decisions, and avoid OpenSpec during design phase |
+| `sysi-capture` | Write finalized design decisions into the right `/system` files and create decision records |
+| `sysi-apply` | Apply OpenSpec changes in build phase by invoking OpenSpec apply first, then using mandatory Superpowers implementation discipline |
+| `sysi-design-change` | Mutate controlled or frozen `/system` truth during build phase only after explicit confirmation |
 
 Typical Codex usage:
 
 ```text
-[$sys-explore]
+[$sysi-explore]
 Design auth and sessions.
 
-[$sys-capture]
+[$sysi-capture]
 Capture the finalized auth decisions.
 
-[$sys-apply]
+[$sysi-apply]
 Apply add-login.
 
-[$sys-design-change]
+[$sysi-design-change]
 Change the auth boundary during build phase.
 ```
 
@@ -556,13 +556,13 @@ Change the auth boundary during build phase.
 Cursor support is intentionally minimal in v1.
 
 ```bash
-sys agent install cursor
+sysi agent install cursor
 ```
 
 This writes:
 
 ```text
-.cursor/rules/sys-orchestrator.mdc
+.cursor/rules/sysi.mdc
 ```
 
 The file contains explicit workflow boundaries, phase rules, `/system` authority, OpenSpec build expectations, design-change protection, and role inference guidance. It is intentionally minimal and is not a deep runtime integration.
@@ -572,7 +572,7 @@ The file contains explicit workflow boundaries, phase rules, `/system` authority
 Claude Code support is intentionally minimal in v1.
 
 ```bash
-sys agent install claude
+sysi agent install claude
 ```
 
 This creates or updates a marked section in:
@@ -581,21 +581,21 @@ This creates or updates a marked section in:
 CLAUDE.md
 ```
 
-Existing unrelated `CLAUDE.md` content is preserved. The sys section is bounded by:
+Existing unrelated `CLAUDE.md` content is preserved. The sysi section is bounded by:
 
 ```text
-<!-- SYS-ORCHESTRATOR:START -->
-<!-- SYS-ORCHESTRATOR:END -->
+<!-- SYSI:START -->
+<!-- SYSI:END -->
 ```
 
-The managed section mirrors the minimal Cursor boundaries: it tells Claude Code how to respect design/build phases, `/system` truth, OpenSpec build workflow, `sys design-change`, and inferred role access without claiming hard sandboxing or runtime enforcement.
+The managed section mirrors the minimal Cursor boundaries: it tells Claude Code how to respect design/build phases, `/system` truth, OpenSpec build workflow, `sysi design-change`, and inferred role access without claiming hard sandboxing or runtime enforcement.
 
 ## Status And Validation
 
 ### Human Status
 
 ```bash
-sys status
+sysi status
 ```
 
 The dashboard shows:
@@ -612,7 +612,7 @@ The dashboard shows:
 ### JSON Status
 
 ```bash
-sys status --json
+sysi status --json
 ```
 
 This is useful for agents and scripts. It includes:
@@ -628,7 +628,7 @@ This is useful for agents and scripts. It includes:
 ### Watch Mode
 
 ```bash
-sys status --watch
+sysi status --watch
 ```
 
 This refreshes the terminal dashboard until interrupted.
@@ -636,7 +636,7 @@ This refreshes the terminal dashboard until interrupted.
 ### Validate
 
 ```bash
-sys validate
+sysi validate
 ```
 
 Validation checks required `/system` files and, in build phase, checks frozen/controlled file baselines.
@@ -649,157 +649,157 @@ warning: missing required file: system/contracts/conventions.md
 warning: missing required file: system/security/model.md
 ```
 
-If a frozen or controlled file changes after `sys design freeze`, status and validation report that `sys design-change` is required. Controlled files include API, event, auth, conventions, errors, security model, and canonical schema files.
+If a frozen or controlled file changes after `sysi design freeze`, status and validation report that `sysi design-change` is required. Controlled files include API, event, auth, conventions, errors, security model, and canonical schema files.
 
 ## Command Reference
 
-### `sys init`
+### `sysi init`
 
-Initializes a repo-local sys project.
+Initializes a repo-local sysi project.
 
 ```bash
-sys init
+sysi init
 ```
 
-Creates `.sys-orchestrator/`, scaffolds `/system` including contracts and security files, creates `frontend/` and `backend/` when missing, initializes OpenSpec inside `frontend/` and `backend/`, records `design` phase, and prints the next command.
+Creates `.sysi/`, scaffolds `/system` including contracts and security files, creates `frontend/` and `backend/` when missing, initializes OpenSpec inside `frontend/` and `backend/`, records `design` phase, and prints the next command.
 
 Running it again preserves existing state, reports that the project is already initialized, and ensures the frontend/backend OpenSpec workspaces still exist. Targets that already contain `openspec/config.yaml` are skipped.
 
-### `sys status`
+### `sysi status`
 
 Prints the human dashboard.
 
 ```bash
-sys status
+sysi status
 ```
 
 Use JSON output for agents:
 
 ```bash
-sys status --json
+sysi status --json
 ```
 
 Use watch mode for repeated refresh:
 
 ```bash
-sys status --watch
+sysi status --watch
 ```
 
-### `sys validate`
+### `sysi validate`
 
 Validates the required `/system` files and freeze baselines.
 
 ```bash
-sys validate
+sysi validate
 ```
 
-### `sys design start`
+### `sysi design start`
 
 Sets or confirms design phase.
 
 ```bash
-sys design start
+sysi design start
 ```
 
-### `sys design freeze`
+### `sysi design freeze`
 
 Moves the project into build phase and records freeze baselines.
 
 ```bash
-sys design freeze
+sysi design freeze
 ```
 
-### `sys explore [topic]`
+### `sysi explore [topic]`
 
 Prints design-agent guidance.
 
 ```bash
-sys explore
-sys explore auth
+sysi explore
+sysi explore auth
 ```
 
 This command does not invoke OpenSpec.
 
-### `sys capture`
+### `sysi capture`
 
 Prints capture guidance for finalized design decisions.
 
 ```bash
-sys capture
+sysi capture
 ```
 
-In build phase this command fails and points users to `sys design-change`.
+In build phase this command fails and points users to `sysi design-change`.
 
-### `sys design-change <name>`
+### `sysi design-change <name>`
 
 Prints controlled mutation guidance for foundational `/system` changes during build phase.
 
 ```bash
-sys design-change change-auth-boundary
+sysi design-change change-auth-boundary
 ```
 
-### `sys change propose <name>`
+### `sysi change propose <name>`
 
 Requires build phase and must be run from `frontend/` or `backend/`. Invokes OpenSpec in that implementation workspace to create a change.
 
 ```bash
-sys change propose add-login
+sysi change propose add-login
 ```
 
-### `sys change apply <name>`
+### `sysi change apply <name>`
 
 Requires build phase and must be run from `frontend/` or `backend/`. Checks for the OpenSpec change in that implementation workspace, invokes the OpenSpec apply instruction workflow there, and prints the required OpenSpec apply plus Superpowers handoff.
 
 ```bash
-sys change apply add-login
+sysi change apply add-login
 ```
 
-### `sys change archive <name>`
+### `sysi change archive <name>`
 
 Requires build phase and must be run from `frontend/` or `backend/`. Invokes OpenSpec archive in that implementation workspace.
 
 ```bash
-sys change archive add-login
+sysi change archive add-login
 ```
 
-### `sys agent install codex`
+### `sysi agent install codex`
 
 Installs Codex project-local skills.
 
 ```bash
-sys agent install codex
+sysi agent install codex
 ```
 
-### `sys agent install cursor`
+### `sysi agent install cursor`
 
 Installs minimal Cursor rules.
 
 ```bash
-sys agent install cursor
+sysi agent install cursor
 ```
 
-### `sys agent install claude`
+### `sysi agent install claude`
 
-Creates or updates the marked sys section in `CLAUDE.md`.
+Creates or updates the marked sysi section in `CLAUDE.md`.
 
 ```bash
-sys agent install claude
+sysi agent install claude
 ```
 
 ## Troubleshooting
 
-### `sys project not initialized`
+### `sysi project not initialized`
 
 You are outside a directory tree containing:
 
 ```text
-.sys-orchestrator/state.json
+.sysi/state.json
 ```
 
 Run:
 
 ```bash
-sys init
+sysi init
 ```
 
 from the intended monorepo root.
@@ -811,36 +811,36 @@ You ran a build-phase command before freezing design.
 Run:
 
 ```bash
-sys design freeze
+sysi design freeze
 ```
 
 then retry the build command.
 
 ### `normal capture is blocked in build phase`
 
-`sys capture` is only for design phase.
+`sysi capture` is only for design phase.
 
 During build phase, use:
 
 ```bash
-sys design-change <name>
+sysi design-change <name>
 ```
 
 ### `openspec executable not found`
 
-`sys init` and build change commands that invoke OpenSpec require the `openspec` executable.
+`sysi init` and build change commands that invoke OpenSpec require the `openspec` executable.
 
 Either put `openspec` on `PATH`, or set:
 
 ```bash
-SYS_OPENSPEC=/path/to/openspec
+SYSI_OPENSPEC=/path/to/openspec
 ```
 
 ### OpenSpec PostHog Network Errors
 
 In restricted-network environments, OpenSpec can print telemetry errors after successful commands if it cannot reach `edge.openspec.dev`.
 
-Those errors are not necessarily sys or OpenSpec command failures. Check the command exit code and the main command output.
+Those errors are not necessarily sysi or OpenSpec command failures. Check the command exit code and the main command output.
 
 ### Cursor And Claude Are Minimal
 
@@ -850,7 +850,7 @@ This is intentional. The core protocol is stabilized first; richer adapters can 
 
 ### No Generated `/system/views`
 
-Sys does not generate `/system/views` in v1. Role-specific context is expressed through `.sys-orchestrator/allowlists.json` and agent instructions.
+Sysi does not generate `/system/views` in v1. Role-specific context is expressed through `.sysi/allowlists.json` and agent instructions.
 
 ## Contributor Notes
 
@@ -864,7 +864,7 @@ When a change affects commands, workflow, agent integration, phase behavior, or 
 4. Run:
 
 ```bash
-GOCACHE=/tmp/sys-orchestrator-go-cache go test ./...
+GOCACHE=/tmp/sysi-go-cache go test ./...
 openspec validate --specs
 ```
 

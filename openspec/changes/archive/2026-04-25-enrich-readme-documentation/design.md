@@ -9,7 +9,7 @@
 - Preserve the README as a practical reference, not a marketing page.
 - Document both human workflows and agent workflows.
 - Include command examples that match the current implementation.
-- Explain the relationship between `sys`, `/system`, OpenSpec, Superpowers, Codex, Cursor, and Claude Code.
+- Explain the relationship between `sysi`, `/system`, OpenSpec, Superpowers, Codex, Cursor, and Claude Code.
 - Give contributors enough context to update documentation when behavior changes.
 
 **Non-Goals:**
@@ -54,7 +54,7 @@ Alternatives considered:
 
 ### Keep command examples copy-pasteable
 
-Examples should use real command names from the implementation and avoid unsupported aliases. The README should mention `go run ./cmd/sys <command>` for source usage and `sys <command>` for installed usage.
+Examples should use real command names from the implementation and avoid unsupported aliases. The README should mention `go run ./cmd/sysi <command>` for source usage and `sysi <command>` for installed usage.
 
 ## Risks / Trade-offs
 

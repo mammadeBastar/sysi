@@ -1,8 +1,8 @@
 ## Context
 
-The current agent integrations are installed by `sys agent install codex|cursor|claude`. The command surface is right, but the generated content is too thin:
+The current agent integrations are installed by `sysi agent install codex|cursor|claude`. The command surface is right, but the generated content is too thin:
 
-- Codex skills are short embedded strings in `internal/sysapp/app.go`.
+- Codex skills are short embedded strings in `internal/sysiapp/app.go`.
 - Cursor rules are a small bullet list.
 - Claude Code receives a small marked section.
 
@@ -12,7 +12,7 @@ For an agent-native workflow, those instructions need to carry the operating pro
 
 **Goals:**
 - Make Codex skills comprehensive enough to guide real agent work.
-- Keep one-command installation: `sys agent install codex`.
+- Keep one-command installation: `sysi agent install codex`.
 - Keep Cursor and Claude Code support minimal, but materially more explicit.
 - Make instruction content easy to inspect and maintain.
 - Test for required sections and guardrails in generated instruction files.
@@ -34,14 +34,14 @@ Move large instruction content out of tiny ad hoc string functions and into temp
 Preferred structure:
 
 ```text
-internal/sysapp/templates/agents/
+internal/sysiapp/templates/agents/
   codex/
-    sys-explore/SKILL.md
-    sys-capture/SKILL.md
-    sys-apply/SKILL.md
-    sys-design-change/SKILL.md
+    sysi-explore/SKILL.md
+    sysi-capture/SKILL.md
+    sysi-apply/SKILL.md
+    sysi-design-change/SKILL.md
   cursor/
-    sys-orchestrator.mdc
+    sysi.mdc
   claude/
     CLAUDE.section.md
 ```
@@ -72,9 +72,9 @@ Cursor and Claude Code should remain lighter but should still include explicit w
 
 ### Do Not Duplicate OpenSpec And Superpowers Internals
 
-`sys-apply` should require OpenSpec apply and Superpowers discipline, but it should not paste full copies of those external skills. Instead it should state when to invoke/read them and what local sys-specific constraints apply before and during apply.
+`sysi-apply` should require OpenSpec apply and Superpowers discipline, but it should not paste full copies of those external skills. Instead it should state when to invoke/read them and what local sysi-specific constraints apply before and during apply.
 
-This keeps Sys Orchestrator as an orchestrator rather than a fork of those workflows.
+This keeps Sysi as an orchestrator rather than a fork of those workflows.
 
 ### Test Instruction Semantics Through Required Markers
 
@@ -86,7 +86,7 @@ Tests should assert generated files contain required sections and phrases such a
 - `Decision Record`
 - `OpenSpec`
 - `Superpowers`
-- `sys design-change`
+- `sysi design-change`
 - `Do Not`
 
 This avoids brittle full-file snapshots while preventing accidental regression back to skeletal instructions.
@@ -96,19 +96,19 @@ This avoids brittle full-file snapshots while preventing accidental regression b
 - [Risk] Skills become too long and hard to follow -> Mitigation: structure with clear headings and operational checklists.
 - [Risk] Instructions drift from CLI behavior -> Mitigation: tests check required command names and README documents the instruction-pack model.
 - [Risk] Cursor/Claude support feels second-class -> Mitigation: document that this is intentional in v1 while still making their instructions explicit enough to avoid dangerous behavior.
-- [Risk] Sys duplicates OpenSpec/Superpowers guidance -> Mitigation: reference those workflows instead of copying them wholesale.
+- [Risk] Sysi duplicates OpenSpec/Superpowers guidance -> Mitigation: reference those workflows instead of copying them wholesale.
 
 ## Migration Plan
 
 Existing users can rerun:
 
 ```bash
-sys agent install codex
-sys agent install cursor
-sys agent install claude
+sysi agent install codex
+sysi agent install cursor
+sysi agent install claude
 ```
 
-This overwrites generated sys-owned Codex skill files and Cursor rule files, and updates only the marked sys section in `CLAUDE.md`.
+This overwrites generated sysi-owned Codex skill files and Cursor rule files, and updates only the marked sysi section in `CLAUDE.md`.
 
 ## Open Questions
 

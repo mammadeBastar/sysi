@@ -1,3 +1,3 @@
-module sys-orchestrator
+module sysi
 
 go 1.22

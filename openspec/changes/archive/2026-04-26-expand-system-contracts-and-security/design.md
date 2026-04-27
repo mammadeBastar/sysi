@@ -11,7 +11,7 @@ The scaffold also lacks a security foundation. `system/contracts/auth.md` covers
 - Add minimal contract files for cross-cutting API/event conventions and error behavior.
 - Add a first-class `system/security/model.md` file without introducing a broader runtime folder.
 - Treat the new files as canonical, validated `/system` foundation files.
-- Include the new files in design freeze baselines so build-phase mutations are visible and directed through `sys design-change`.
+- Include the new files in design freeze baselines so build-phase mutations are visible and directed through `sysi design-change`.
 - Update role allowlists and generated agent instructions so agents know when to read or update contract and security truth.
 - Update tests and README documentation for the expanded scaffold.
 
@@ -58,9 +58,9 @@ Alternatives considered:
 
 ### Treat New Files As Required And Controlled
 
-The CLI should scaffold the new files during `sys init`, include them in `requiredSystemFiles`, and include them in freeze baselines. The new contract files and security model should be controlled after design freeze, like other cross-boundary foundation files.
+The CLI should scaffold the new files during `sysi init`, include them in `requiredSystemFiles`, and include them in freeze baselines. The new contract files and security model should be controlled after design freeze, like other cross-boundary foundation files.
 
-This keeps the design/build boundary coherent: changes to error behavior, conventions, or security invariants after freeze should be visible as foundation drift and should use `sys design-change`.
+This keeps the design/build boundary coherent: changes to error behavior, conventions, or security invariants after freeze should be visible as foundation drift and should use `sysi design-change`.
 
 ### Include Security In Role Guidance
 
@@ -77,7 +77,7 @@ The agent guidance should still keep ownership narrow:
 
 - [Risk] The scaffold starts growing too many default files -> Mitigation: add only two contract files and one security file; keep feature-specific concerns opt-in.
 - [Risk] Agents duplicate security details into auth or architecture files -> Mitigation: skill guidance should identify `system/security/model.md` as the owning file for security posture and use links/summaries elsewhere.
-- [Risk] Freeze baselines become too strict for evolving design details -> Mitigation: these files represent cross-boundary foundation truth; build-phase changes should be explicit through `sys design-change`.
+- [Risk] Freeze baselines become too strict for evolving design details -> Mitigation: these files represent cross-boundary foundation truth; build-phase changes should be explicit through `sysi design-change`.
 - [Risk] Role allowlists expose security text too broadly -> Mitigation: `system/security/model.md` must document rules and assumptions, never real secrets or secret values.
 
 ## Migration Plan
@@ -89,7 +89,7 @@ The agent guidance should still keep ownership narrow:
 5. Update README structure documentation.
 6. Update tests for scaffold creation, validation, freeze behavior, generated instruction content, and documentation markers.
 
-Existing initialized projects can receive these files by rerunning the updated `sys init`; the existing scaffold behavior writes missing files without overwriting existing files.
+Existing initialized projects can receive these files by rerunning the updated `sysi init`; the existing scaffold behavior writes missing files without overwriting existing files.
 
 ## Open Questions
 

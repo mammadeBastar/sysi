@@ -1,0 +1,23 @@
+<!-- SYSI:START -->
+## Sysi
+
+This is the minimal Claude Code integration for Sysi. It gives workflow boundaries only; it is not a deep runtime integration.
+
+## Core Rules
+
+- Treat `/system` as the current project foundation and source of truth.
+- Treat contracts and security as foundation truth: API/events/auth/conventions/errors live under `system/contracts/`, and security posture lives under `system/security/`.
+- Respect phase boundaries: design phase captures decisions into `/system`; build phase implements OpenSpec changes.
+- Run `sysi status` before substantial work and use its phase, role, validation, and freeze signals.
+- Infer role from the current working directory and read only the relevant `/system` files.
+- During design phase, use `sysi explore` and `sysi capture` semantics; do not create OpenSpec changes for design decisions.
+- During build phase, implementation work must flow through OpenSpec and the local apply workflow.
+- Do not mutate controlled or frozen `/system` files during build phase without `sysi design-change`.
+- If implementation reveals design drift, stop and ask for a foundation update instead of forcing code around stale truth.
+
+## Limits
+
+- Claude Code support is intentionally minimal in v1.
+- These rules do not enforce filesystem sandboxing.
+- These rules do not replace OpenSpec, Superpowers, tests, or explicit user confirmation.
+<!-- SYSI:END -->
