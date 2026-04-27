@@ -386,7 +386,11 @@ func TestCodexInstructionPacksContainOperationalGuardrails(t *testing.T) {
 			"mandatory",
 			"missing prerequisite",
 			"frozen /system files",
+			"new or changed HTTP endpoints",
+			"user confirmation",
 			"sysi design-change",
+			"sysi-design-change",
+			"does not agree",
 			"system/security/**",
 		},
 		"sysi-design-change": {

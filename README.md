@@ -466,6 +466,10 @@ and reports that implementation must continue through OpenSpec apply plus Superp
 
 In Codex, use the generated `sysi-apply` skill. It requires the local OpenSpec apply workflow, `openspec-apply-change`, before implementation edits and requires Superpowers methods for planning, TDD, debugging, and verification.
 
+If apply work reveals design drift from `/system`, the agent must stop ordinary implementation work and double-check the mismatch with the user. Examples include new endpoints, changed request or response payload shapes, event contract changes, auth/session/permission changes, shared error behavior, data-shape changes, security invariants, or observability contracts that are not represented in `/system`.
+
+If the user agrees that foundation truth should change, the agent must use `sysi design-change <name>` and the generated `sysi-design-change` workflow before mutating controlled or frozen `/system` files. If the user does not agree, implementation must not continue in a way that contradicts `/system`.
+
 ### Archive A Change
 
 ```bash
