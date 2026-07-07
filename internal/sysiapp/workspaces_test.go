@@ -93,3 +93,55 @@ func TestWorkspaceRemoveRefusesActiveChangesWithoutForce(t *testing.T) {
 		t.Fatalf("remove of unknown workspace should fail: stdout=%q stderr=%q", out, errOut)
 	}
 }
+
+func TestWorkspaceRemoveIgnoresArchivedChanges(t *testing.T) {
+	root := initProject(t, "api")
+
+	// Only archived changes exist; the active-change guard must ignore archive.
+	archivedDir := filepath.Join(root, "api", "changes", "archive", "old-change")
+	if err := os.MkdirAll(archivedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, root, "workspace", "remove", "api")
+	if code != 0 {
+		t.Fatalf("remove with only archived changes should succeed without --force: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+
+	// Removing the last workspace leaves an empty list, not null.
+	stateJSON := readFile(t, filepath.Join(root, ".sysi", "state.json"))
+	if !strings.Contains(stateJSON, `"workspaces": []`) {
+		t.Fatalf("state.json should contain \"workspaces\": [] after removing last workspace:\n%s", stateJSON)
+	}
+	if strings.Contains(stateJSON, `"workspaces": null`) {
+		t.Fatalf("state.json must not contain null workspaces:\n%s", stateJSON)
+	}
+
+	code, out, errOut = runApp(t, root, "workspace", "list")
+	if code != 0 {
+		t.Fatalf("workspace list failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	if !strings.Contains(out, "no workspaces declared") {
+		t.Fatalf("empty workspace list should print no workspaces declared: %q", out)
+	}
+}
+
+func TestWorkspaceAddRemoveRejectFlagAsName(t *testing.T) {
+	root := initProject(t, "api")
+
+	code, out, errOut := runApp(t, root, "workspace", "add", "--force")
+	if code == 0 {
+		t.Fatalf("workspace add with flag as name should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "usage: sysi workspace add <name>") {
+		t.Fatalf("workspace add flag misuse should print usage: stdout=%q stderr=%q", out, errOut)
+	}
+
+	code, out, errOut = runApp(t, root, "workspace", "remove", "--force")
+	if code == 0 {
+		t.Fatalf("workspace remove with flag as name should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "usage: sysi workspace remove <name> [--force]") {
+		t.Fatalf("workspace remove flag misuse should print usage: stdout=%q stderr=%q", out, errOut)
+	}
+}

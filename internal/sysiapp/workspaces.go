@@ -98,12 +98,16 @@ func (a *App) workspace(args []string) error {
 
 	switch args[0] {
 	case "list":
+		if len(state.Workspaces) == 0 {
+			fmt.Fprintln(a.opts.Stdout, "no workspaces declared")
+			return nil
+		}
 		for _, ws := range state.Workspaces {
 			fmt.Fprintf(a.opts.Stdout, "%s: %d active change(s)\n", ws, len(countActiveChangeNames(root, ws)))
 		}
 		return nil
 	case "add":
-		if len(args) < 2 {
+		if len(args) < 2 || strings.HasPrefix(args[1], "--") {
 			return errors.New("usage: sysi workspace add <name>")
 		}
 		name := args[1]
@@ -133,7 +137,7 @@ func (a *App) workspace(args []string) error {
 		fmt.Fprintf(a.opts.Stdout, "workspace added: %s\n", name)
 		return nil
 	case "remove":
-		if len(args) < 2 {
+		if len(args) < 2 || strings.HasPrefix(args[1], "--") {
 			return errors.New("usage: sysi workspace remove <name> [--force]")
 		}
 		name := args[1]
@@ -144,7 +148,7 @@ func (a *App) workspace(args []string) error {
 		if len(active) > 0 && !hasFlag(args, "--force") {
 			return fmt.Errorf("workspace %q has active change(s): %s; use --force to remove anyway", name, strings.Join(active, ", "))
 		}
-		var kept []string
+		kept := make([]string, 0, len(state.Workspaces))
 		for _, ws := range state.Workspaces {
 			if ws != name {
 				kept = append(kept, ws)
