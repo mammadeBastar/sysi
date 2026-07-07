@@ -215,5 +215,43 @@ func (a *App) changeApply(root, workspace, name string) error {
 }
 
 func (a *App) changeArchive(root, workspace, name string, now time.Time) error {
-	return errors.New("not implemented")
+	meta, err := loadChangeMeta(root, workspace, name)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
+		}
+		return fmt.Errorf("change %q: reading meta.json: %w", name, err)
+	}
+
+	tasksPath := filepath.Join(changeDir(root, workspace, name), "tasks.md")
+	if data, err := os.ReadFile(tasksPath); err == nil {
+		unchecked := strings.Count(string(data), "- [ ]")
+		if unchecked > 0 {
+			fmt.Fprintf(a.opts.Stdout, "warning: tasks.md has %d unchecked task(s)\n", unchecked)
+		}
+	}
+
+	archiveDir := filepath.Join(root, workspace, "changes", "archive")
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		return err
+	}
+	target := filepath.Join(archiveDir, now.Format("2006-01-02")+"-"+name)
+	if exists(target) {
+		return fmt.Errorf("archive target already exists: %s", target)
+	}
+	if err := os.Rename(changeDir(root, workspace, name), target); err != nil {
+		return err
+	}
+
+	meta.Status = ChangeStatusArchived
+	meta.UpdatedAt = now.Format(time.RFC3339)
+	if err := saveJSON(filepath.Join(target, "meta.json"), meta); err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		rel = target
+	}
+	fmt.Fprintf(a.opts.Stdout, "change archived: %s -> %s\n", name, filepath.ToSlash(rel))
+	return nil
 }

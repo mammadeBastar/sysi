@@ -272,3 +272,64 @@ func TestChangeApplyUnknownChangeListsAvailable(t *testing.T) {
 	}
 	assertContainsAll(t, "unknown change error", out+errOut, []string{"ghost", "add-login", "proposed"})
 }
+
+func TestChangeArchiveMovesChangeAndWarnsOnUncheckedTasks(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	if code, _, _ := runApp(t, apiDir, "change", "apply", "add-login"); code != 0 {
+		t.Fatal("apply failed")
+	}
+
+	// Archive with unchecked tasks warns but succeeds.
+	code, out, errOut := runApp(t, apiDir, "change", "archive", "add-login")
+	if code != 0 {
+		t.Fatalf("archive failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	if !strings.Contains(out+errOut, "unchecked") {
+		t.Fatalf("archive should warn about unchecked tasks: stdout=%q stderr=%q", out, errOut)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "api", "changes", "add-login")); err == nil {
+		t.Fatal("active change dir should be gone after archive")
+	}
+	matches, err := filepath.Glob(filepath.Join(root, "api", "changes", "archive", "*-add-login"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("expected one archived change dir, got %v (err=%v)", matches, err)
+	}
+	var meta ChangeMeta
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(matches[0], "meta.json"))), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.Status != ChangeStatusArchived {
+		t.Fatalf("archived status = %q, want %q", meta.Status, ChangeStatusArchived)
+	}
+
+	// Archiving an unknown change lists available ones.
+	if code, out, errOut := runApp(t, apiDir, "change", "archive", "ghost"); code == 0 {
+		t.Fatalf("archive of unknown change should fail: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestChangeArchiveNoWarningWhenTasksComplete(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	tasksPath := filepath.Join(root, "api", "changes", "add-login", "tasks.md")
+	done := "# Tasks: add-login\n\n- [x] 1. Everything done\n"
+	if err := os.WriteFile(tasksPath, []byte(done), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, apiDir, "change", "archive", "add-login")
+	if code != 0 {
+		t.Fatalf("archive failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	if strings.Contains(out+errOut, "unchecked") {
+		t.Fatalf("archive should not warn when tasks are complete: stdout=%q stderr=%q", out, errOut)
+	}
+}
