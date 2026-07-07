@@ -116,3 +116,52 @@ func TestChangeProposeRequiresBuildPhase(t *testing.T) {
 		t.Fatalf("error should mention build phase: stdout=%q stderr=%q", out, errOut)
 	}
 }
+
+func TestChangeApplyMarksApplyingAndPrintsHandoff(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+
+	code, out, errOut := runApp(t, apiDir, "change", "apply", "add-login")
+	if code != 0 {
+		t.Fatalf("change apply failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	assertContainsAll(t, "apply handoff", out, []string{
+		"proposal.md",
+		"design.md",
+		"tasks.md",
+		"Superpowers",
+		"TDD",
+		"design drift",
+		"sysi design-change",
+	})
+
+	var meta ChangeMeta
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(root, "api", "changes", "add-login", "meta.json"))), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.Status != ChangeStatusApplying {
+		t.Fatalf("status = %q, want %q", meta.Status, ChangeStatusApplying)
+	}
+
+	// Re-apply is idempotent.
+	if code, _, _ := runApp(t, apiDir, "change", "apply", "add-login"); code != 0 {
+		t.Fatal("re-apply should succeed")
+	}
+}
+
+func TestChangeApplyUnknownChangeListsAvailable(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+
+	code, out, errOut := runApp(t, apiDir, "change", "apply", "ghost")
+	if code == 0 {
+		t.Fatalf("apply of unknown change should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	assertContainsAll(t, "unknown change error", out+errOut, []string{"ghost", "add-login", "proposed"})
+}

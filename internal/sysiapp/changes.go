@@ -184,7 +184,31 @@ func (a *App) changePropose(root, workspace, name string, now time.Time) error {
 }
 
 func (a *App) changeApply(root, workspace, name string) error {
-	return errors.New("not implemented")
+	meta, err := loadChangeMeta(root, workspace, name)
+	if err != nil {
+		return fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
+	}
+	if meta.Status == ChangeStatusArchived {
+		return fmt.Errorf("change %q is archived", name)
+	}
+	meta.Status = ChangeStatusApplying
+	meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := saveChangeMeta(root, workspace, name, meta); err != nil {
+		return err
+	}
+
+	rel := filepath.ToSlash(filepath.Join(workspace, "changes", name))
+	fmt.Fprintf(a.opts.Stdout, "SYSI CHANGE APPLY: %s\n\n", name)
+	fmt.Fprintf(a.opts.Stdout, "Workspace: %s\nStatus: %s\nLocation: %s\n\n", workspace, meta.Status, rel)
+	fmt.Fprintln(a.opts.Stdout, "Read proposal.md, design.md, and tasks.md before editing implementation code.")
+	fmt.Fprintln(a.opts.Stdout, "Work tasks in order with Superpowers discipline: planning, TDD, systematic debugging, verification.")
+	fmt.Fprintln(a.opts.Stdout, "Check off each task in tasks.md only after implementation and verification.")
+	fmt.Fprintln(a.opts.Stdout, "")
+	fmt.Fprintln(a.opts.Stdout, "Stop and use sysi design-change if implementation reveals design drift from /system:")
+	fmt.Fprintln(a.opts.Stdout, "new or changed endpoints, payload shapes, event contracts, auth/session/permission rules,")
+	fmt.Fprintln(a.opts.Stdout, "shared error behavior, schema or data invariants, security invariants, or observability")
+	fmt.Fprintln(a.opts.Stdout, "contracts that /system does not represent.")
+	return nil
 }
 
 func (a *App) changeArchive(root, workspace, name string, now time.Time) error {
