@@ -281,6 +281,10 @@ func TestStatusShowsWorkspacesAndNativeChanges(t *testing.T) {
 	if strings.Contains(out, "openspec") {
 		t.Fatalf("status JSON should not mention openspec:\n%s", out)
 	}
+	assertContainsAll(t, "json keys", out, []string{"\"workspaces\"", "\"activeChanges\"", "\"changes\""})
+	if !strings.Contains(out, "\"changes\": []") {
+		t.Fatalf("empty web workspace should emit \"changes\": []:\n%s", out)
+	}
 
 	// Human dashboard shows workspaces and change statuses.
 	code, out, errOut = runApp(t, root, "status")
@@ -288,6 +292,30 @@ func TestStatusShowsWorkspacesAndNativeChanges(t *testing.T) {
 		t.Fatalf("status failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	assertContainsAll(t, "human status", out, []string{"Workspaces:", "api", "add-login", "proposed", "web"})
+}
+
+func TestStatusWithZeroWorkspacesEmitsEmptyList(t *testing.T) {
+	root := initProject(t, "api")
+	if code, out, errOut := runApp(t, root, "workspace", "remove", "api", "--force"); code != 0 {
+		t.Fatalf("workspace remove failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+
+	code, out, errOut := runApp(t, root, "status", "--json")
+	if code != 0 {
+		t.Fatalf("status json failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	if strings.Contains(out, "\"workspaces\": null") {
+		t.Fatalf("status JSON should not emit \"workspaces\": null:\n%s", out)
+	}
+	if !strings.Contains(out, "\"workspaces\": []") {
+		t.Fatalf("status JSON should emit \"workspaces\": []:\n%s", out)
+	}
+
+	code, out, errOut = runApp(t, root, "status")
+	if code != 0 {
+		t.Fatalf("status failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	assertContainsAll(t, "human status with no workspaces", out, []string{"Workspaces:", "(none)"})
 }
 
 func TestValidateReportsMissingRequiredSystemFile(t *testing.T) {

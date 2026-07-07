@@ -562,11 +562,12 @@ func (a *App) buildStatus(root string, state State) (Status, error) {
 }
 
 func workspacesStatus(root string, workspaces []string) []WorkspaceStatus {
-	var statuses []WorkspaceStatus
+	statuses := make([]WorkspaceStatus, 0, len(workspaces))
 	for _, ws := range workspaces {
+		info, err := os.Stat(filepath.Join(root, ws))
 		status := WorkspaceStatus{
 			Name:    ws,
-			Present: exists(filepath.Join(root, ws)),
+			Present: err == nil && info.IsDir(),
 			Changes: []ChangeSummary{},
 		}
 		for _, change := range listChanges(root, ws) {
@@ -590,6 +591,9 @@ func (a *App) renderStatus(status Status) {
 	fmt.Fprintf(a.opts.Stdout, "System health: %s\n", health)
 	fmt.Fprintf(a.opts.Stdout, "Freeze baselines: %d\n", status.Freeze.Baselines)
 	fmt.Fprintln(a.opts.Stdout, "Workspaces:")
+	if len(status.Workspaces) == 0 {
+		fmt.Fprintln(a.opts.Stdout, "  (none)")
+	}
 	for _, workspace := range status.Workspaces {
 		fmt.Fprintf(a.opts.Stdout, "  - %s: present=%t changes=%d\n", workspace.Name, workspace.Present, workspace.ActiveChanges)
 		for _, change := range workspace.Changes {
