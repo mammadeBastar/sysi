@@ -931,7 +931,8 @@ func validateSystem(root string, state State) (Validation, FreezeStatus) {
 	}
 
 	for _, ws := range state.Workspaces {
-		if !exists(filepath.Join(root, ws)) {
+		info, err := os.Stat(filepath.Join(root, ws))
+		if err != nil || !info.IsDir() {
 			warnings = append(warnings, fmt.Sprintf("missing workspace directory: %s", ws))
 			continue
 		}
@@ -944,8 +945,8 @@ func validateSystem(root string, state State) (Validation, FreezeStatus) {
 				continue
 			}
 			rel := filepath.ToSlash(filepath.Join(ws, "changes", entry.Name()))
-			var meta ChangeMeta
-			if err := loadJSON(filepath.Join(root, ws, "changes", entry.Name(), "meta.json"), &meta); err != nil {
+			meta, err := loadChangeMeta(root, ws, entry.Name())
+			if err != nil {
 				warnings = append(warnings, fmt.Sprintf("change %s has missing or invalid meta.json", rel))
 				continue
 			}

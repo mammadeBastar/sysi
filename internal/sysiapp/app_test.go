@@ -355,6 +355,26 @@ func TestValidateReportsWorkspaceAndChangeProblems(t *testing.T) {
 		t.Fatal("propose failed")
 	}
 
+	// Archive a change, then recreate an active change under the same name so
+	// validation must flag the archived-name collision.
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "old-change"); code != 0 {
+		t.Fatal("propose old-change failed")
+	}
+	if code, _, _ := runApp(t, apiDir, "change", "apply", "old-change"); code != 0 {
+		t.Fatal("apply old-change failed")
+	}
+	if code, _, _ := runApp(t, apiDir, "change", "archive", "old-change"); code != 0 {
+		t.Fatal("archive old-change failed")
+	}
+	collideDir := filepath.Join(root, "api", "changes", "old-change")
+	if err := os.MkdirAll(collideDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	collideMeta := `{"name":"old-change","workspace":"api","status":"proposed","createdAt":"x","updatedAt":"x"}`
+	if err := os.WriteFile(filepath.Join(collideDir, "meta.json"), []byte(collideMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	// Break things: remove a workspace dir, corrupt a meta.json, add a bogus status.
 	if err := os.RemoveAll(filepath.Join(root, "web")); err != nil {
 		t.Fatal(err)
@@ -378,7 +398,34 @@ func TestValidateReportsWorkspaceAndChangeProblems(t *testing.T) {
 	assertContainsAll(t, "validate warnings", out+errOut, []string{
 		"missing workspace directory: web",
 		"api/changes/add-login",
-		"bad-status",
+		"has missing or invalid meta.json",
+		"api/changes/bad-status",
+		`has invalid status "bogus"`,
+		"api/changes/old-change",
+		"collides with an archived change name",
+	})
+}
+
+func TestValidateFlagsWorkspacePathThatIsAFile(t *testing.T) {
+	root := initProject(t, "api,web")
+	if code, _, _ := runApp(t, root, "design", "freeze"); code != 0 {
+		t.Fatal("freeze failed")
+	}
+
+	// Replace the web workspace directory with a plain file.
+	if err := os.RemoveAll(filepath.Join(root, "web")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, root, "validate")
+	if code == 0 {
+		t.Fatalf("validate should fail when workspace path is a file: stdout=%q stderr=%q", out, errOut)
+	}
+	assertContainsAll(t, "workspace-as-file warning", out+errOut, []string{
+		"missing workspace directory: web",
 	})
 }
 
