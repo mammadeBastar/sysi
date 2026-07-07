@@ -12,7 +12,7 @@ The system SHALL install Codex-native sysi skills with `sysi agent install codex
 - **THEN** the system creates project-local `sysi-explore`, `sysi-capture`, `sysi-apply`, and `sysi-design-change` skill directories under `.codex/skills/`
 
 ### Requirement: Avoid Role-Specific Install Commands
-The system SHALL avoid requiring users to install separate design, frontend, or backend agent roles.
+The system SHALL avoid requiring users to install separate agent roles per workspace.
 
 #### Scenario: Codex integration installed once
 - **WHEN** a user has run `sysi agent install codex`
@@ -47,7 +47,7 @@ The system SHALL generate comprehensive Codex skills for `sysi-explore`, `sysi-c
 - **THEN** each generated Codex skill contains purpose, phase rules, role and file access rules, workflow steps, validation expectations, stop conditions, and prohibited actions
 
 ### Requirement: Codex Explore Skill Guides Design Discovery
-The system SHALL generate a `sysi-explore` Codex skill that guides design-phase exploration without OpenSpec design changes.
+The system SHALL generate a `sysi-explore` Codex skill that guides design-phase exploration without creating build changes.
 
 #### Scenario: Explore skill installed
 - **WHEN** `sysi-explore/SKILL.md` is generated
@@ -64,14 +64,14 @@ The system SHALL generate a `sysi-capture` Codex skill that guides finalized des
 - **AND** it includes a routing table that defines what each `/system` file must own, what it must not contain, and when to cross-link instead of duplicating truth
 
 ### Requirement: Codex Apply Skill Enforces Build Apply Boundaries
-The system SHALL generate a `sysi-apply` Codex skill that coordinates OpenSpec apply with Sysi foundation rules and Superpowers discipline.
+The system SHALL generate a `sysi-apply` Codex skill that coordinates the native change workflow with Sysi foundation rules and Superpowers discipline.
 
 #### Scenario: Apply skill installed
 - **WHEN** `sysi-apply/SKILL.md` is generated
-- **THEN** it requires build phase, mandatory OpenSpec apply invocation, mandatory Superpowers apply discipline, `/system` context review including contracts, flows, modules, data, observability, and security where relevant, frozen-file protection, concrete design drift detection examples, user confirmation before foundation mutation, and escalation to `sysi-design-change` through `sysi design-change <name>` when foundational truth must change
+- **THEN** it requires build phase, a mandatory `sysi change apply <name>` invocation before implementation edits, reading the change's `proposal.md`, `design.md`, and `tasks.md`, mandatory Superpowers apply discipline, checking off tasks in `tasks.md` after implementation and verification, `/system` context review including contracts, flows, modules, data, observability, and security where relevant, frozen-file protection, concrete design drift detection examples, user confirmation before foundation mutation, and escalation to `sysi-design-change` through `sysi design-change <name>` when foundational truth must change
 
-#### Scenario: Apply skill lacks required external workflow
-- **WHEN** the Codex `sysi-apply` skill is invoked and the local OpenSpec apply or Superpowers workflow is unavailable
+#### Scenario: Apply skill lacks required workflow
+- **WHEN** the Codex `sysi-apply` skill is invoked and the required Superpowers workflow is unavailable
 - **THEN** it instructs the agent to stop and report the missing prerequisite instead of implementing without the required apply discipline
 
 #### Scenario: Apply skill detects design drift
@@ -87,7 +87,7 @@ The system SHALL generate a `sysi-design-change` Codex skill that defines contro
 #### Scenario: Design change skill installed
 - **WHEN** `sysi-design-change/SKILL.md` is generated
 - **THEN** it requires agents to open and maintain the `system/architecture/decisions/<date>-<name>.md` decision artifact created by `sysi design-change`
-- **AND** it requires rationale, affected `/system` files including security files when security truth changes, impacted frontend/backend OpenSpec changes, migration or compatibility notes, validation before and after mutation, and explicit user confirmation before updating controlled or frozen files
+- **AND** it requires rationale, affected `/system` files including security files when security truth changes, impacted workspace changes, migration or compatibility notes, validation before and after mutation, and explicit user confirmation before updating controlled or frozen files
 - **AND** it includes a foundation-change routing table that defines what each `/system` file must own, what it must not contain, and when to cross-link instead of duplicating truth
 - **AND** it requires schema-evolution, compatibility, rollback, backfill, security-boundary, and observability impacts when those concerns are affected
 
@@ -103,18 +103,18 @@ The system SHALL keep generated agent instruction content in maintainable templa
 - **THEN** `sysi agent install codex` installs those reference files alongside the generated `SKILL.md`
 
 ### Requirement: Cursor Instructions Are Explicit But Minimal
-The system SHALL generate Cursor rules that remain minimal while explicitly covering phase boundaries, `/system` authority, OpenSpec build workflow, design-change protection, and role inference.
+The system SHALL generate Cursor rules that remain minimal while explicitly covering phase boundaries, `/system` authority, the native change workflow inside declared workspaces, design-change protection, and role inference.
 
 #### Scenario: Cursor rules installed
 - **WHEN** a user runs `sysi agent install cursor`
-- **THEN** `.cursor/rules/sysi.mdc` contains explicit workflow rules and safety boundaries, references contracts and security as foundation truth, and does not claim deep runtime integration
+- **THEN** `.cursor/rules/sysi.mdc` contains explicit workflow rules and safety boundaries, references contracts and security as foundation truth, requires build implementation to flow through `sysi change propose|apply|archive` from the owning workspace, and does not claim deep runtime integration
 
 ### Requirement: Claude Instructions Are Explicit But Minimal
-The system SHALL generate a Claude Code section that remains minimal while explicitly covering phase boundaries, `/system` authority, OpenSpec build workflow, design-change protection, and role inference.
+The system SHALL generate a Claude Code section that remains minimal while explicitly covering phase boundaries, `/system` authority, the native change workflow inside declared workspaces, design-change protection, and role inference.
 
 #### Scenario: Claude instructions installed
 - **WHEN** a user runs `sysi agent install claude`
-- **THEN** the marked sysi section in `CLAUDE.md` contains explicit workflow rules and safety boundaries, references contracts and security as foundation truth, and does not claim deep runtime integration
+- **THEN** the marked sysi section in `CLAUDE.md` contains explicit workflow rules and safety boundaries, references contracts and security as foundation truth, requires build implementation to flow through `sysi change propose|apply|archive` from the owning workspace, and does not claim deep runtime integration
 
 ### Requirement: Instruction Pack Tests Check Required Guardrails
 The system SHALL test generated agent instructions for required operational sections and guardrail phrases.

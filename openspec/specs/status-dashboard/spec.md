@@ -9,20 +9,20 @@ The system SHALL provide `sysi status` as the primary terminal dashboard.
 
 #### Scenario: Status in terminal
 - **WHEN** a user runs `sysi status` in an initialized project
-- **THEN** the system prints a structured dashboard showing phase, freeze state, validation health, frontend/backend OpenSpec workspace summary, agent installs, recent decisions, and warnings
-- **AND** the OpenSpec summary is aggregated only from `frontend/openspec` and `backend/openspec`
-- **AND** the system does not read or count root-level OpenSpec changes
+- **THEN** the system prints a structured dashboard showing root path, phase, inferred role, validation health, freeze baselines, a per-workspace summary of native changes with their statuses, agent installs, and warnings
+- **AND** the workspace summary covers exactly the declared workspaces
 
 ### Requirement: Provide Machine-Readable Status
 The system SHALL provide JSON status output for agents and scripts.
 
 #### Scenario: JSON status requested
 - **WHEN** a user runs `sysi status --json`
-- **THEN** the system prints valid JSON containing phase, root path, detected role, validation results, freeze state, agent integration state, aggregate OpenSpec active change count, and per-workspace OpenSpec status for `frontend` and `backend`
+- **THEN** the system prints valid JSON containing `root`, `phase`, `role`, `validation`, `freeze`, `agents`, and a `workspaces` array
+- **AND** each `workspaces` entry contains `name`, `present`, `activeChanges`, and a `changes` list of `{name, status}` objects
 
-#### Scenario: Root OpenSpec is ignored
-- **WHEN** a sysi project contains a root-level `openspec/changes` directory
-- **THEN** `sysi status` does not include those root-level changes in the OpenSpec active change count
+#### Scenario: Empty lists are never null
+- **WHEN** a project has no declared workspaces, no active changes in a workspace, no validation warnings, or no freeze mutations
+- **THEN** the corresponding JSON fields are empty arrays (`[]`), never `null`
 
 ### Requirement: Watch Status
 The system SHALL support a watch mode for repeated status refreshes.

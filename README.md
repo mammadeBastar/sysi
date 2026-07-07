@@ -2,18 +2,18 @@
 
 `sysi` is a Go CLI for an agent-native monorepo workflow.
 
-It gives agents and humans a durable system foundation before implementation starts. During design, decisions are captured directly into `/system`. During build, implementation changes flow through OpenSpec, while apply work is shaped by Superpowers-style planning, testing, debugging, and verification discipline.
+It gives agents and humans a durable system foundation before implementation starts. During design, decisions are captured directly into `/system`. During build, implementation changes flow through sysi's native change workflow inside declared workspaces, while apply work is shaped by Superpowers-style planning, testing, debugging, and verification discipline.
 
 The short version:
 
 ```text
 /system      = ratified system truth
-OpenSpec     = build-phase change protocol
+sysi changes = build-phase change protocol (native)
 Superpowers  = apply-phase engineering discipline
 sysi          = CLI that ties those pieces together
 ```
 
-`sysi` is intentionally pragmatic. It does not try to become a replacement for OpenSpec, a full documentation generator, or a hard filesystem sandbox. It gives the repository a clear lifecycle, a canonical system folder, validation, phase boundaries, and agent-native instructions.
+`sysi` is intentionally pragmatic. It does not try to become a full documentation generator or a hard filesystem sandbox. It gives the repository a clear lifecycle, a canonical system folder, declared workspaces, a native change protocol, validation, phase boundaries, and agent-native instructions.
 
 ## Table Of Contents
 
@@ -22,6 +22,7 @@ sysi          = CLI that ties those pieces together
 - [Install And Run](#install-and-run)
 - [Quick Start](#quick-start)
 - [Repository Layout](#repository-layout)
+- [Workspaces](#workspaces)
 - [The `/system` Foundation](#the-system-foundation)
 - [Design Phase](#design-phase)
 - [Build Phase](#build-phase)
@@ -30,7 +31,7 @@ sysi          = CLI that ties those pieces together
 - [Command Reference](#command-reference)
 - [Troubleshooting](#troubleshooting)
 - [Contributor Notes](#contributor-notes)
-- [V1 Boundaries](#v1-boundaries)
+- [V2 Boundaries](#v2-boundaries)
 
 ## Mental Model
 
@@ -47,7 +48,7 @@ Final decisions
 ratified current truth
         |
         v
-OpenSpec build changes
+sysi workspace changes
         |
         v
 Implementation with apply discipline
@@ -58,7 +59,7 @@ There are three important boundaries:
 | Layer | Responsibility |
 | --- | --- |
 | `/system` | Current architecture, contracts, flows, modules, schema, security, observability, and decisions |
-| OpenSpec | Build-phase changes to an already-understood system |
+| `sysi changes` | Build-phase changes inside declared workspaces |
 | Superpowers | Apply-phase method for planning, TDD, debugging, and verification |
 
 Design phase is direct and decisive. Build phase is controlled and transactional.
@@ -71,12 +72,12 @@ Sysi projects move through two primary phases.
 
 Design phase is where the system foundation is created. Agents explore, discuss, and make hard decisions. When a decision is final, it is captured into `/system`.
 
-OpenSpec is intentionally not used for design decisions in this phase. The base system does not exist yet, so there is no meaningful implementation change to propose.
+Build changes are intentionally not created in this phase. The base system does not exist yet, so there is no meaningful implementation change to propose.
 
 Typical flow:
 
 ```bash
-sysi init
+sysi init --workspaces frontend,backend
 sysi status
 sysi explore auth
 sysi capture
@@ -85,11 +86,12 @@ sysi design freeze
 
 ### Phase 2: Build
 
-Build phase starts after `sysi design freeze`. At this point, `/system` becomes controlled. Normal implementation work should go through OpenSpec.
+Build phase starts after `sysi design freeze`. At this point, `/system` becomes controlled. Normal implementation work goes through sysi changes, run from the workspace that owns the work.
 
 Typical flow:
 
 ```bash
+cd frontend
 sysi change propose add-login
 sysi change apply add-login
 sysi change archive add-login
@@ -127,23 +129,25 @@ If `sysi` is installed on your `PATH`, use:
 sysi <command>
 ```
 
-The CLI uses only the Go standard library in v1.
+The CLI uses only the Go standard library and has no external dependencies. No other executable is required for any sysi command.
 
 ## Quick Start
 
-Initialize a repository:
+Initialize a repository with its declared workspaces:
 
 ```bash
-sysi init
+sysi init --workspaces frontend,backend
 ```
 
-This creates:
+Workspaces are never guessed. A bare `sysi init` on an uninitialized repository prints usage guidance with examples and fails, so declare the implementation directories explicitly.
+
+Initialization creates:
 
 ```text
 .sysi/
 system/
-frontend/openspec/
-backend/openspec/
+frontend/changes/
+backend/changes/
 ```
 
 Check project status:
@@ -162,6 +166,12 @@ Capture finalized decisions:
 
 ```bash
 sysi capture
+```
+
+Add another workspace later if the system grows:
+
+```bash
+sysi workspace add worker
 ```
 
 Freeze the design foundation:
@@ -203,12 +213,14 @@ A sysi-initialized repository contains:
 │   ├── security/
 │   └── obs/
 ├── frontend/
-│   └── openspec/
+│   └── changes/
+│       └── archive/
 └── backend/
-    └── openspec/
+    └── changes/
+        └── archive/
 ```
 
-`sysi init` creates `.sysi/`, `system/`, and the `frontend/` and `backend/` implementation directories when they are missing. It runs non-interactive OpenSpec initialization inside `frontend/` and `backend/` only. The monorepo root and `/system` are not initialized as OpenSpec workspaces by `sysi init`.
+`sysi init --workspaces <names>` creates `.sysi/`, `system/`, and one directory per declared workspace with a `changes/` scaffold inside. Active build changes live under `<workspace>/changes/<name>/`; completed changes move to `<workspace>/changes/archive/<date>-<name>/` (the archive directory is created on first archive).
 
 ### `.sysi/`
 
@@ -216,19 +228,55 @@ A sysi-initialized repository contains:
 
 | File | Purpose |
 | --- | --- |
-| `state.json` | Tracks phase, version, timestamps, and installed agent integrations |
+| `state.json` | Version 2 state: tracks phase, timestamps, declared `workspaces`, and installed agent integrations |
 | `freeze.json` | Stores freeze baselines for controlled `/system` files |
-| `allowlists.json` | Stores role-based system-file allowlists |
+| `allowlists.json` | Stores role-based system-file allowlists, one role per declared workspace plus design roles |
 | `captures/` | Reserved for capture-related metadata |
 | `agents/` | Reserved for agent integration metadata |
 
+`state.json` uses schema `version: 2`. States written by sysi v1 are rejected with an explanatory error; v1 projects should keep using the v1 binary.
+
 This is machine state. The architectural truth belongs in `/system`.
+
+## Workspaces
+
+Workspaces are the implementation directories where build changes live. They are declared explicitly, first at `sysi init --workspaces <names>` and later with the `sysi workspace` commands. Sysi never guesses a repository layout.
+
+Workspace names are lowercase slugs: they start with a lowercase letter and may contain lowercase letters, digits, and hyphens. The names `system`, `docs`, `openspec`, `design`, and `system-maintainer` are reserved.
+
+List declared workspaces and their active change counts:
+
+```bash
+sysi workspace list
+```
+
+Add a workspace:
+
+```bash
+sysi workspace add worker
+```
+
+This validates the name, rejects duplicates and names that collide with an existing file at the repo root, creates `worker/changes/`, scaffolds `system/modules/worker.md`, and updates the allowlists and state.
+
+Remove a workspace:
+
+```bash
+sysi workspace remove worker
+```
+
+Removal refuses if the workspace has active changes; it names them and requires `--force` to proceed:
+
+```bash
+sysi workspace remove worker --force
+```
+
+Removing a workspace only removes it from sysi state. The directory and its contents are left on disk.
 
 ## The `/system` Foundation
 
 `/system` is the canonical project foundation. It is designed for agents and humans to read before they build.
 
-`sysi init` scaffolds:
+`sysi init` scaffolds (module files shown for `--workspaces frontend,backend`):
 
 ```text
 system/
@@ -301,9 +349,7 @@ system/flows/export-report.flow.md
 
 ### Modules
 
-`system/modules/frontend.md` describes frontend pages, components, responsibilities, and dependencies.
-
-`system/modules/backend.md` describes backend services, modules, responsibilities, and dependencies.
+`system/modules/<workspace>.md` describes one module file per declared workspace: its components, responsibilities, and dependencies. Init scaffolds a module file for every declared workspace, and `sysi workspace add` scaffolds one for each workspace added later.
 
 ### Data
 
@@ -362,17 +408,15 @@ The command reports:
 - current phase
 - inferred agent role
 - allowed `/system` files for that role
-- reminder not to create OpenSpec changes during design phase
+- reminder not to create build changes during design phase
 
 Role is inferred from the current working directory:
 
 | Directory | Inferred Role |
 | --- | --- |
 | repo root | `design` |
-| `frontend/` | `frontend` |
-| `backend/` | `backend` |
 | `system/` | `system-maintainer` |
-| `openspec/changes/` | `change` |
+| inside declared workspace `<name>` | `<name>` |
 
 ### Capture
 
@@ -422,15 +466,26 @@ system/data/schema.sql
 
 ## Build Phase
 
-Build phase uses OpenSpec for implementation changes. Run build change commands from the implementation workspace that owns the work, either `frontend/` or `backend/`. The sysi CLI still discovers the monorepo root from those directories, but it runs OpenSpec in the inferred implementation workspace.
-
-Sysi-managed projects do not use a root OpenSpec workspace. `sysi init` creates `frontend/openspec/` and `backend/openspec/`, and status only reads those two workspaces.
+Build phase uses sysi's native change workflow. Changes are plain files inside the workspace that owns the work; no external tool is involved. Run change commands from inside a declared workspace directory — from anywhere else they fail and list the declared workspaces.
 
 Before using build commands, freeze the design:
 
 ```bash
 sysi design freeze
 ```
+
+A change lives at `<workspace>/changes/<name>/` and contains:
+
+| File | Purpose |
+| --- | --- |
+| `proposal.md` | Why the change exists, what changes, foundation alignment, out of scope |
+| `design.md` | Decisions with alternatives, interfaces, risks |
+| `tasks.md` | Checkbox task list worked in order during apply |
+| `meta.json` | Machine state: name, workspace, status, timestamps |
+
+Change statuses progress `proposed` → `applying` → `archived`.
+
+Change names must be lowercase slugs (lowercase letters, digits, hyphens). A name that duplicates an active change or collides with an archived change in the same workspace is rejected, and the name `archive` is reserved.
 
 ### Propose A Change
 
@@ -439,17 +494,7 @@ cd frontend
 sysi change propose add-login
 ```
 
-This requires build phase and invokes OpenSpec from the current implementation workspace:
-
-```bash
-openspec new change add-login
-```
-
-If the `openspec` executable is not on `PATH`, set:
-
-```bash
-SYSI_OPENSPEC=/path/to/openspec sysi change propose add-login
-```
+This requires build phase and scaffolds `frontend/changes/add-login/` with templated `proposal.md`, `design.md`, and `tasks.md` plus a `meta.json` with status `proposed`. Fill the three documents before applying.
 
 ### Apply A Change
 
@@ -458,19 +503,13 @@ cd frontend
 sysi change apply add-login
 ```
 
-This checks that `frontend/openspec/changes/add-login` exists, invokes from the frontend workspace:
+This marks the change `applying` and prints the apply handoff: read `proposal.md`, `design.md`, and `tasks.md` before editing implementation code, work tasks in order with Superpowers discipline (planning, TDD, systematic debugging, verification), and check off each task only after implementation and verification.
 
-```bash
-openspec instructions apply --change add-login --json
-```
-
-and reports that implementation must continue through OpenSpec apply plus Superpowers discipline.
-
-In Codex, use the generated `sysi-apply` skill. It requires the local OpenSpec apply workflow, `openspec-apply-change`, before implementation edits and requires Superpowers methods for planning, TDD, debugging, and verification.
-
-If apply work reveals design drift from `/system`, the agent must stop ordinary implementation work and double-check the mismatch with the user. Examples include new endpoints, changed request or response payload shapes, event contract changes, auth/session/permission changes, shared error behavior, data-shape changes, security invariants, or observability contracts that are not represented in `/system`.
+The handoff also prints the design-drift stop conditions. If apply work reveals design drift from `/system`, the agent must stop ordinary implementation work and double-check the mismatch with the user. Examples include new or changed endpoints, payload shapes, event contracts, auth/session/permission rules, shared error behavior, schema or data invariants, security invariants, or observability contracts that are not represented in `/system`.
 
 If the user agrees that foundation truth should change, the agent must use `sysi design-change <name>` and the generated `sysi-design-change` workflow before mutating controlled or frozen `/system` files. If the user does not agree, implementation must not continue in a way that contradicts `/system`.
+
+In Codex, use the generated `sysi-apply` skill. It requires running `sysi change apply <name>` before implementation edits and requires Superpowers methods for planning, TDD, debugging, and verification.
 
 ### Archive A Change
 
@@ -479,11 +518,7 @@ cd frontend
 sysi change archive add-login
 ```
 
-This requires build phase and invokes OpenSpec archive from the current implementation workspace:
-
-```bash
-openspec archive add-login
-```
+This moves the change to `frontend/changes/archive/<date>-add-login/` and sets its status to `archived`. Archiving warns when `tasks.md` still has unchecked tasks and when the change has an unexpected status; it fails if the dated archive target already exists. If updating the archived `meta.json` fails, the move is rolled back.
 
 ### Foundation Changes During Build
 
@@ -493,13 +528,12 @@ If build work reveals that `/system` itself must change, use:
 sysi design-change change-auth-boundary
 ```
 
-This prints the required design-change guidance:
+This prints the required design-change guidance and creates a dated artifact under `system/architecture/decisions/` recording:
 
 - rationale
 - affected `/system` files
-- impacted OpenSpec changes
+- impacted workspace changes
 - migration notes
-- a dated artifact under `system/architecture/decisions/`
 
 ## Agent Integrations
 
@@ -507,7 +541,7 @@ Agent integration is installed once per project. Runtime role is inferred from t
 
 ### Codex
 
-Codex is the first-class v1 integration.
+Codex is the first-class integration.
 
 ```bash
 sysi agent install codex
@@ -537,9 +571,9 @@ The installed Codex skills are:
 
 | Skill | Purpose |
 | --- | --- |
-| `sysi-explore` | Explore design questions from `/system`, surface candidate decisions, and avoid OpenSpec during design phase |
+| `sysi-explore` | Explore design questions from `/system`, surface candidate decisions, and avoid creating build changes during design phase |
 | `sysi-capture` | Write finalized design decisions into the right `/system` files and create decision records |
-| `sysi-apply` | Apply OpenSpec changes in build phase by invoking OpenSpec apply first, then using mandatory Superpowers implementation discipline |
+| `sysi-apply` | Apply a sysi change in build phase: run `sysi change apply`, read the change's `proposal.md`, `design.md`, and `tasks.md`, then work the tasks with mandatory Superpowers implementation discipline |
 | `sysi-design-change` | Mutate controlled or frozen `/system` truth during build phase only after explicit confirmation |
 
 Typical Codex usage:
@@ -560,7 +594,7 @@ Change the auth boundary during build phase.
 
 ### Cursor
 
-Cursor support is intentionally minimal in v1.
+Cursor support is intentionally minimal.
 
 ```bash
 sysi agent install cursor
@@ -572,11 +606,11 @@ This writes:
 .cursor/rules/sysi.mdc
 ```
 
-The file contains explicit workflow boundaries, phase rules, `/system` authority, OpenSpec build expectations, design-change protection, and role inference guidance. It is intentionally minimal and is not a deep runtime integration.
+The file contains explicit workflow boundaries, phase rules, `/system` authority, the native change workflow expectation (`sysi change propose|apply|archive` from the owning workspace), design-change protection, and role inference guidance. It is intentionally minimal and is not a deep runtime integration.
 
 ### Claude Code
 
-Claude Code support is intentionally minimal in v1.
+Claude Code support is intentionally minimal.
 
 ```bash
 sysi agent install claude
@@ -595,7 +629,7 @@ Existing unrelated `CLAUDE.md` content is preserved. The sysi section is bounded
 <!-- SYSI:END -->
 ```
 
-The managed section mirrors the minimal Cursor boundaries: it tells Claude Code how to respect design/build phases, `/system` truth, OpenSpec build workflow, `sysi design-change`, and inferred role access without claiming hard sandboxing or runtime enforcement.
+The managed section mirrors the minimal Cursor boundaries: it tells Claude Code how to respect design/build phases, `/system` truth, the native change workflow inside declared workspaces, `sysi design-change`, and inferred role access without claiming hard sandboxing or runtime enforcement.
 
 ## Status And Validation
 
@@ -612,7 +646,7 @@ The dashboard shows:
 - inferred role
 - system health
 - freeze baselines
-- frontend/backend OpenSpec workspace summary
+- per-workspace change summary with each change's status
 - installed agent integrations
 - validation warnings
 
@@ -630,9 +664,9 @@ This is useful for agents and scripts. It includes:
 - `validation`
 - `freeze`
 - `agents`
-- `openspec`
+- `workspaces`
 
-The `openspec` object aggregates active changes from `frontend/openspec` and `backend/openspec` only. Root-level OpenSpec directories are not part of sysi project status.
+`workspaces` is an array with one entry per declared workspace: `name`, `present` (whether the directory exists), `activeChanges`, and `changes`, a list of `{name, status}` objects. Agents can enumerate active changes from it without globbing the filesystem. Empty lists are emitted as `[]`, never `null`.
 
 ### Watch Mode
 
@@ -648,7 +682,14 @@ This refreshes the terminal dashboard until interrupted.
 sysi validate
 ```
 
-Validation checks required `/system` files and, in build phase, checks frozen/controlled file baselines.
+Validation checks:
+
+- required `/system` files, including `system/modules/<workspace>.md` for every declared workspace
+- every declared workspace directory exists and is a directory
+- every active change has a parseable `meta.json`
+- every active change has a legal status (`proposed` or `applying`)
+- no active change name collides with an archived change name
+- in build phase, frozen/controlled file baselines
 
 If required files are missing, validation reports warnings such as:
 
@@ -662,17 +703,19 @@ If a frozen or controlled file changes after `sysi design freeze`, status and va
 
 ## Command Reference
 
-### `sysi init`
+### `sysi init --workspaces <names>`
 
-Initializes a repo-local sysi project.
+Initializes a repo-local sysi project with declared workspaces.
 
 ```bash
-sysi init
+sysi init --workspaces frontend,backend
 ```
 
-Creates `.sysi/`, scaffolds `/system` including contracts and security files, creates `frontend/` and `backend/` when missing, initializes OpenSpec inside `frontend/` and `backend/`, records `design` phase, and prints the next command.
+Creates `.sysi/` with version 2 state, scaffolds `/system` including contracts, security, and one `system/modules/<workspace>.md` per declared workspace, creates each workspace directory with a `changes/` scaffold, records `design` phase, and prints the next command. Workspace names that conflict with an existing file are rejected before anything is written.
 
-Running it again preserves existing state, reports that the project is already initialized, and ensures the frontend/backend OpenSpec workspaces still exist. Targets that already contain `openspec/config.yaml` are skipped.
+`--workspaces` is required on first init: a bare `sysi init` on an uninitialized repository prints usage guidance and fails without writing any state.
+
+Running `sysi init` again in an initialized repository preserves existing state, re-ensures the `/system` scaffold, allowlists, and workspace `changes/` directories, and reports that the project is already initialized.
 
 ### `sysi status`
 
@@ -696,7 +739,7 @@ sysi status --watch
 
 ### `sysi validate`
 
-Validates the required `/system` files and freeze baselines.
+Validates the required `/system` files, workspace and change health, and freeze baselines.
 
 ```bash
 sysi validate
@@ -727,7 +770,7 @@ sysi explore
 sysi explore auth
 ```
 
-This command does not invoke OpenSpec.
+This command does not create build changes.
 
 ### `sysi capture`
 
@@ -747,31 +790,65 @@ Requires build phase and creates a controlled mutation artifact for foundational
 sysi design-change change-auth-boundary
 ```
 
-The artifact is created under `system/architecture/decisions/<date>-change-auth-boundary.md` and is the working record for rationale, affected `/system` files, impacted frontend/backend OpenSpec changes, migration notes, confirmation, decision, and consequences.
+The artifact is created under `system/architecture/decisions/<date>-change-auth-boundary.md` and is the working record for rationale, affected `/system` files, impacted workspace changes (its `## Impacted Changes` section), migration notes, confirmation, decision, and consequences.
+
+### `sysi workspace list`
+
+Lists declared workspaces with their active change counts.
+
+```bash
+sysi workspace list
+```
+
+### `sysi workspace add <name>`
+
+Declares a new workspace.
+
+```bash
+sysi workspace add worker
+```
+
+Validates the name (lowercase slug, not reserved, not already declared, no file conflict), creates `<name>/changes/`, scaffolds `system/modules/<name>.md`, and updates allowlists and state.
+
+### `sysi workspace remove <name> [--force]`
+
+Removes a workspace from sysi state.
+
+```bash
+sysi workspace remove worker
+```
+
+Refuses if the workspace has active changes; `--force` overrides. The directory is left on disk.
 
 ### `sysi change propose <name>`
 
-Requires build phase and must be run from `frontend/` or `backend/`. Invokes OpenSpec in that implementation workspace to create a change.
+Requires build phase and must be run from inside a declared workspace. Scaffolds `<workspace>/changes/<name>/` with `proposal.md`, `design.md`, `tasks.md`, and `meta.json` at status `proposed`.
 
 ```bash
 sysi change propose add-login
 ```
 
+The name must be a lowercase slug and must not duplicate an active change or collide with an archived change in the workspace.
+
 ### `sysi change apply <name>`
 
-Requires build phase and must be run from `frontend/` or `backend/`. Checks for the OpenSpec change in that implementation workspace, invokes the OpenSpec apply instruction workflow there, and prints the required OpenSpec apply plus Superpowers handoff.
+Requires build phase and must be run from inside a declared workspace. Marks the change `applying` and prints the Superpowers apply handoff plus the design-drift stop conditions.
 
 ```bash
 sysi change apply add-login
 ```
 
+If the change does not exist, the error lists the changes that do. Archived changes cannot be applied.
+
 ### `sysi change archive <name>`
 
-Requires build phase and must be run from `frontend/` or `backend/`. Invokes OpenSpec archive in that implementation workspace.
+Requires build phase and must be run from inside a declared workspace. Moves the change to `<workspace>/changes/archive/<date>-<name>/` and sets its status to `archived`.
 
 ```bash
 sysi change archive add-login
 ```
+
+Warns on unchecked tasks in `tasks.md` and on unexpected statuses; fails if the archive target already exists.
 
 ### `sysi agent install codex`
 
@@ -810,10 +887,20 @@ You are outside a directory tree containing:
 Run:
 
 ```bash
-sysi init
+sysi init --workspaces <names>
 ```
 
 from the intended monorepo root.
+
+### `sysi init requires --workspaces` (`missing --workspaces`)
+
+You ran a bare `sysi init` on an uninitialized repository. Sysi never guesses workspaces; declare them explicitly:
+
+```bash
+sysi init --workspaces frontend,backend
+```
+
+Workspaces are the implementation directories where build changes live. They can be adjusted later with `sysi workspace add|remove`.
 
 ### `build changes require build phase`
 
@@ -827,6 +914,19 @@ sysi design freeze
 
 then retry the build command.
 
+### `change commands must run inside a declared workspace`
+
+You ran `sysi change propose|apply|archive` from the repo root, `system/`, or another directory that is not inside a declared workspace. The error lists the declared workspaces.
+
+Run the command from the workspace that owns the change:
+
+```bash
+cd frontend
+sysi change propose add-login
+```
+
+If the directory should be a workspace but is not declared, declare it first with `sysi workspace add <name>`.
+
 ### `normal capture is blocked in build phase`
 
 `sysi capture` is only for design phase.
@@ -837,31 +937,15 @@ During build phase, use:
 sysi design-change <name>
 ```
 
-### `openspec executable not found`
-
-`sysi init` and build change commands that invoke OpenSpec require the `openspec` executable.
-
-Either put `openspec` on `PATH`, or set:
-
-```bash
-SYSI_OPENSPEC=/path/to/openspec
-```
-
-### OpenSpec PostHog Network Errors
-
-In restricted-network environments, OpenSpec can print telemetry errors after successful commands if it cannot reach `edge.openspec.dev`.
-
-Those errors are not necessarily sysi or OpenSpec command failures. Check the command exit code and the main command output.
-
 ### Cursor And Claude Are Minimal
 
-Codex receives project-local skills in v1. Cursor and Claude Code receive instruction files only.
+Codex receives project-local skills. Cursor and Claude Code receive instruction files only.
 
 This is intentional. The core protocol is stabilized first; richer adapters can be added later.
 
 ### No Generated `/system/views`
 
-Sysi does not generate `/system/views` in v1. Role-specific context is expressed through `.sysi/allowlists.json` and agent instructions.
+Sysi does not generate `/system/views`. Role-specific context is expressed through `.sysi/allowlists.json` and agent instructions.
 
 ## Contributor Notes
 
@@ -869,43 +953,44 @@ Keep documentation aligned with behavior.
 
 When a change affects commands, workflow, agent integration, phase behavior, or the `/system` scaffold:
 
-1. Update the relevant OpenSpec specs.
+1. Update the relevant spec files under `openspec/specs/`.
 2. Update `README.md`.
 3. Add or update tests when behavior changes.
 4. Run:
 
 ```bash
 GOCACHE=/tmp/sysi-go-cache go test ./...
-openspec validate --specs
 ```
 
 Use the `/tmp` Go cache form in sandboxed environments where the default Go cache is not writable.
 
-Documentation-only changes should still verify OpenSpec status and validation.
+Documentation-only changes should still run the test suite.
 
-## V1 Boundaries
+## V2 Boundaries
 
-V1 intentionally does not provide:
+V2 intentionally does not provide:
 
 - hard OS-level filesystem sandboxing for agents
 - generated `/system/views`
 - deep Cursor runtime integration
 - deep Claude Code runtime integration
 - a full curses-style terminal UI
-- replacement behavior for OpenSpec
 - replacement behavior for Superpowers
 - automatic chat-log extraction from the CLI alone
+- a multi-phase plan workflow yet (planned M2)
+- gap analysis of plan coverage and change hygiene yet (planned M3)
 
-The intended v1 shape is smaller and stricter:
+The intended v2 shape is smaller and stricter:
 
 ```text
-Go CLI
+Go CLI with no external dependencies
 repo-local state
 canonical /system scaffold
+declared workspaces
 design/build phase boundary
+native build changes
 status and validation
 Codex skills
 minimal Cursor/Claude instructions
-OpenSpec build handoff
 Superpowers apply discipline
 ```
