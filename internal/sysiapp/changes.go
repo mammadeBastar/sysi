@@ -178,13 +178,23 @@ func (a *App) changePropose(root, workspace, name string, now time.Time) error {
 	return nil
 }
 
-func (a *App) changeApply(root, workspace, name string) error {
+// loadChangeMetaStrict loads a change's meta.json, turning missing changes and
+// read failures into user-facing errors.
+func loadChangeMetaStrict(root, workspace, name string) (ChangeMeta, error) {
 	meta, err := loadChangeMeta(root, workspace, name)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
+			return ChangeMeta{}, fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
 		}
-		return fmt.Errorf("change %q: reading meta.json: %w", name, err)
+		return ChangeMeta{}, fmt.Errorf("change %q: reading meta.json: %w", name, err)
+	}
+	return meta, nil
+}
+
+func (a *App) changeApply(root, workspace, name string) error {
+	meta, err := loadChangeMetaStrict(root, workspace, name)
+	if err != nil {
+		return err
 	}
 	switch meta.Status {
 	case ChangeStatusProposed, ChangeStatusApplying:
@@ -215,12 +225,12 @@ func (a *App) changeApply(root, workspace, name string) error {
 }
 
 func (a *App) changeArchive(root, workspace, name string, now time.Time) error {
-	meta, err := loadChangeMeta(root, workspace, name)
+	meta, err := loadChangeMetaStrict(root, workspace, name)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
-		}
-		return fmt.Errorf("change %q: reading meta.json: %w", name, err)
+		return err
+	}
+	if meta.Status != ChangeStatusProposed && meta.Status != ChangeStatusApplying {
+		fmt.Fprintf(a.opts.Stdout, "warning: archiving change with unexpected status %q\n", meta.Status)
 	}
 
 	tasksPath := filepath.Join(changeDir(root, workspace, name), "tasks.md")
@@ -246,7 +256,8 @@ func (a *App) changeArchive(root, workspace, name string, now time.Time) error {
 	meta.Status = ChangeStatusArchived
 	meta.UpdatedAt = now.Format(time.RFC3339)
 	if err := saveJSON(filepath.Join(target, "meta.json"), meta); err != nil {
-		return err
+		_ = os.Rename(target, changeDir(root, workspace, name))
+		return fmt.Errorf("updating archived meta.json: %w", err)
 	}
 	rel, err := filepath.Rel(root, target)
 	if err != nil {

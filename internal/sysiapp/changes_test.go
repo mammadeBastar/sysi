@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func initBuildProject(t *testing.T, workspaces string) string {
@@ -308,8 +309,51 @@ func TestChangeArchiveMovesChangeAndWarnsOnUncheckedTasks(t *testing.T) {
 	}
 
 	// Archiving an unknown change lists available ones.
-	if code, out, errOut := runApp(t, apiDir, "change", "archive", "ghost"); code == 0 {
+	code, out, errOut = runApp(t, apiDir, "change", "archive", "ghost")
+	if code == 0 {
 		t.Fatalf("archive of unknown change should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	assertContainsAll(t, "unknown change error", out+errOut, []string{"not found", "available"})
+}
+
+func TestChangeArchiveWarnsOnUnexpectedStatus(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	seedChangeStatus(t, root, "api", "add-login", "bogus")
+
+	code, out, errOut := runApp(t, apiDir, "change", "archive", "add-login")
+	if code != 0 {
+		t.Fatalf("archive with unexpected status should still succeed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	if !strings.Contains(out+errOut, `unexpected status "bogus"`) {
+		t.Fatalf("archive should warn about unexpected status: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestChangeArchiveFailsWhenTargetExists(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	target := filepath.Join(root, "api", "changes", "archive", today+"-add-login")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, apiDir, "change", "archive", "add-login")
+	if code == 0 {
+		t.Fatalf("archive onto existing target should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "archive target already exists") {
+		t.Fatalf("error should mention existing archive target: stdout=%q stderr=%q", out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(root, "api", "changes", "add-login")); err != nil {
+		t.Fatalf("active change dir should remain after failed archive: %v", err)
 	}
 }
 
