@@ -183,6 +183,8 @@ func (a *App) Run(args []string) int {
 		err = a.capture()
 	case "design-change":
 		err = a.designChange(args[1:])
+	case "workspace":
+		err = a.workspace(args[1:])
 	case "change":
 		err = a.change(args[1:])
 	case "agent":
@@ -202,13 +204,14 @@ func (a *App) printHelp() {
 	fmt.Fprintln(a.opts.Stdout, `sysi orchestrates agent-native system design and implementation.
 
 Usage:
-  sysi init
+  sysi init --workspaces <name>[,<name>...]
   sysi status [--json|--watch]
   sysi validate
   sysi design start|freeze
   sysi explore [topic]
   sysi capture
   sysi design-change <name>
+  sysi workspace list|add|remove <name> [--force]
   sysi change propose|apply|archive <name>
   sysi agent install codex|cursor|claude`)
 }
