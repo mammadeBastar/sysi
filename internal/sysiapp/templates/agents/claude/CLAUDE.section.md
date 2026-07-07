@@ -17,7 +17,7 @@ This is the minimal Claude Code integration for Sysi. It gives workflow boundari
 
 ## Limits
 
-- Claude Code support is intentionally minimal in v1.
+- Claude Code support is intentionally minimal.
 - These rules do not enforce filesystem sandboxing.
 - These rules do not replace Superpowers, tests, or explicit user confirmation.
 <!-- SYSI:END -->

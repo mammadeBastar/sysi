@@ -16,7 +16,7 @@ Use this skill as a principal-engineer design review partner when the user wants
 
 1. Run or read `sysi status --json` when useful.
 2. Identify the current phase, root, inferred role, validation warnings, and installed agent state.
-3. Infer role from the current working directory: design, frontend, backend, system-maintainer, or change.
+3. Infer role from the current working directory: repo root is design, system/ is system-maintainer, and any declared workspace directory is that workspace's role.
 4. Read `.sysi/allowlists.json` when role access is unclear.
 5. Read only the allowed `/system` files needed for the topic.
 6. Read the DDIA reference when the design depends on data, persistence, concurrency, distribution, evolution, or derived state.
@@ -31,8 +31,7 @@ Use this skill as a principal-engineer design review partner when the user wants
 ## Role And File Access
 
 - Respect the role inferred from the current working directory.
-- Frontend work should usually read `system/architecture/system.md`, `system/contracts/**`, `system/flows/**`, `system/modules/frontend.md`, and `system/security/**`.
-- Backend work should usually read `system/architecture/system.md`, `system/contracts/**`, `system/flows/**`, `system/modules/backend.md`, `system/data/**`, `system/security/**`, and `system/obs/**`.
+- Workspace work should read `system/contracts/**`, `system/flows/**`, `system/modules/<workspace>.md`, `system/data/**`, `system/obs/**`, and `system/security/**` as relevant to the declared workspace.
 - Design and system-maintainer work may read broader `/system` context.
 - Treat allowed `/system` files as the source of truth and avoid reading unrelated implementation files unless the user asks for codebase investigation. In generated guidance and summaries, call these the allowed /system files for the current role.
 

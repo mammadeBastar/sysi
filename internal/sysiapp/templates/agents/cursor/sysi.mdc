@@ -21,6 +21,6 @@ This is the minimal Cursor integration for Sysi. It gives workflow boundaries on
 
 ## Limits
 
-- Cursor support is intentionally minimal in v1.
+- Cursor support is intentionally minimal.
 - These rules do not enforce filesystem sandboxing.
 - These rules do not replace Superpowers, tests, or explicit user confirmation.
