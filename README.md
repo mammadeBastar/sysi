@@ -551,6 +551,7 @@ This creates:
 
 ```text
 .codex/skills/sysi-explore/SKILL.md
+.codex/skills/sysi-explore/references/ddia-mental-model.md
 .codex/skills/sysi-capture/SKILL.md
 .codex/skills/sysi-apply/SKILL.md
 .codex/skills/sysi-design-change/SKILL.md
@@ -709,6 +710,12 @@ Initializes a repo-local sysi project with declared workspaces.
 
 ```bash
 sysi init --workspaces frontend,backend
+```
+
+The equals form is also accepted:
+
+```bash
+sysi init --workspaces=frontend,backend
 ```
 
 Creates `.sysi/` with version 2 state, scaffolds `/system` including contracts, security, and one `system/modules/<workspace>.md` per declared workspace, creates each workspace directory with a `changes/` scaffold, records `design` phase, and prints the next command. Workspace names that conflict with an existing file are rejected before anything is written.
@@ -892,9 +899,9 @@ sysi init --workspaces <names>
 
 from the intended monorepo root.
 
-### `sysi init requires --workspaces` (`missing --workspaces`)
+### `sysi init requires declared workspaces`
 
-You ran a bare `sysi init` on an uninitialized repository. Sysi never guesses workspaces; declare them explicitly:
+You ran a bare `sysi init` on an uninitialized repository and it failed with `error: missing --workspaces`. Sysi never guesses workspaces; declare them explicitly:
 
 ```bash
 sysi init --workspaces frontend,backend
