@@ -246,6 +246,50 @@ func TestRootDiscoveryAndStatusJSON(t *testing.T) {
 	assertContainsAll(t, "backend allowlist", strings.Join(allowlists["backend"], "\n"), []string{"system/security/**"})
 }
 
+func TestStatusShowsWorkspacesAndNativeChanges(t *testing.T) {
+	root := initProject(t, "api,web")
+	if code, _, _ := runApp(t, root, "design", "freeze"); code != 0 {
+		t.Fatal("freeze failed")
+	}
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+
+	code, out, errOut := runApp(t, root, "status", "--json")
+	if code != 0 {
+		t.Fatalf("status json failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	var status Status
+	if err := json.Unmarshal([]byte(out), &status); err != nil {
+		t.Fatalf("status output is not json: %v\n%s", err, out)
+	}
+	if len(status.Workspaces) != 2 {
+		t.Fatalf("workspace count = %d, want 2", len(status.Workspaces))
+	}
+	byName := map[string]WorkspaceStatus{}
+	for _, ws := range status.Workspaces {
+		byName[ws.Name] = ws
+	}
+	api := byName["api"]
+	if api.ActiveChanges != 1 || len(api.Changes) != 1 || api.Changes[0].Name != "add-login" || api.Changes[0].Status != ChangeStatusProposed {
+		t.Fatalf("unexpected api workspace status: %+v", api)
+	}
+	if byName["web"].ActiveChanges != 0 {
+		t.Fatalf("web should have no changes: %+v", byName["web"])
+	}
+	if strings.Contains(out, "openspec") {
+		t.Fatalf("status JSON should not mention openspec:\n%s", out)
+	}
+
+	// Human dashboard shows workspaces and change statuses.
+	code, out, errOut = runApp(t, root, "status")
+	if code != 0 {
+		t.Fatalf("status failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	assertContainsAll(t, "human status", out, []string{"Workspaces:", "api", "add-login", "proposed", "web"})
+}
+
 func TestValidateReportsMissingRequiredSystemFile(t *testing.T) {
 	for _, rel := range []string{
 		"system/contracts/api.yaml",

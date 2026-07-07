@@ -74,27 +74,26 @@ type AgentStatus struct {
 	Claude bool `json:"claude"`
 }
 
-type OpenSpecStatus struct {
-	Present       bool                      `json:"present"`
-	ActiveChanges int                       `json:"activeChanges"`
-	Workspaces    []OpenSpecWorkspaceStatus `json:"workspaces"`
+type ChangeSummary struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
-type OpenSpecWorkspaceStatus struct {
-	Name          string `json:"name"`
-	Path          string `json:"path"`
-	Present       bool   `json:"present"`
-	ActiveChanges int    `json:"activeChanges"`
+type WorkspaceStatus struct {
+	Name          string          `json:"name"`
+	Present       bool            `json:"present"`
+	ActiveChanges int             `json:"activeChanges"`
+	Changes       []ChangeSummary `json:"changes"`
 }
 
 type Status struct {
-	Root       string         `json:"root"`
-	Phase      string         `json:"phase"`
-	Role       string         `json:"role"`
-	Validation Validation     `json:"validation"`
-	Freeze     FreezeStatus   `json:"freeze"`
-	Agents     AgentStatus    `json:"agents"`
-	OpenSpec   OpenSpecStatus `json:"openspec"`
+	Root       string            `json:"root"`
+	Phase      string            `json:"phase"`
+	Role       string            `json:"role"`
+	Validation Validation        `json:"validation"`
+	Freeze     FreezeStatus      `json:"freeze"`
+	Agents     AgentStatus       `json:"agents"`
+	Workspaces []WorkspaceStatus `json:"workspaces"`
 }
 
 var baseRequiredSystemFiles = []string{
@@ -558,8 +557,25 @@ func (a *App) buildStatus(root string, state State) (Status, error) {
 		Validation: validation,
 		Freeze:     freezeStatus,
 		Agents:     agentStatus(root),
-		OpenSpec:   openSpecStatus(root),
+		Workspaces: workspacesStatus(root, state.Workspaces),
 	}, nil
+}
+
+func workspacesStatus(root string, workspaces []string) []WorkspaceStatus {
+	var statuses []WorkspaceStatus
+	for _, ws := range workspaces {
+		status := WorkspaceStatus{
+			Name:    ws,
+			Present: exists(filepath.Join(root, ws)),
+			Changes: []ChangeSummary{},
+		}
+		for _, change := range listChanges(root, ws) {
+			status.Changes = append(status.Changes, ChangeSummary{Name: change.Name, Status: change.Status})
+		}
+		status.ActiveChanges = len(status.Changes)
+		statuses = append(statuses, status)
+	}
+	return statuses
 }
 
 func (a *App) renderStatus(status Status) {
@@ -573,9 +589,12 @@ func (a *App) renderStatus(status Status) {
 	fmt.Fprintf(a.opts.Stdout, "Role: %s\n", status.Role)
 	fmt.Fprintf(a.opts.Stdout, "System health: %s\n", health)
 	fmt.Fprintf(a.opts.Stdout, "Freeze baselines: %d\n", status.Freeze.Baselines)
-	fmt.Fprintf(a.opts.Stdout, "OpenSpec changes: %d\n", status.OpenSpec.ActiveChanges)
-	for _, workspace := range status.OpenSpec.Workspaces {
+	fmt.Fprintln(a.opts.Stdout, "Workspaces:")
+	for _, workspace := range status.Workspaces {
 		fmt.Fprintf(a.opts.Stdout, "  - %s: present=%t changes=%d\n", workspace.Name, workspace.Present, workspace.ActiveChanges)
+		for _, change := range workspace.Changes {
+			fmt.Fprintf(a.opts.Stdout, "      %s: %s\n", change.Name, change.Status)
+		}
 	}
 	fmt.Fprintf(a.opts.Stdout, "Agents: codex=%t cursor=%t claude=%t\n", status.Agents.Codex, status.Agents.Cursor, status.Agents.Claude)
 	if len(status.Validation.Warnings) > 0 {
@@ -963,38 +982,6 @@ func agentStatus(root string) AgentStatus {
 		Cursor: exists(filepath.Join(root, ".cursor", "rules", "sysi.mdc")),
 		Claude: exists(filepath.Join(root, "CLAUDE.md")),
 	}
-}
-
-func openSpecStatus(root string) OpenSpecStatus {
-	status := OpenSpecStatus{Present: true}
-	for _, target := range implementationOpenSpecTargets {
-		workspace := openSpecWorkspaceStatus(root, target)
-		status.Workspaces = append(status.Workspaces, workspace)
-		status.ActiveChanges += workspace.ActiveChanges
-		if !workspace.Present {
-			status.Present = false
-		}
-	}
-	return status
-}
-
-func openSpecWorkspaceStatus(root, target string) OpenSpecWorkspaceStatus {
-	workspace := OpenSpecWorkspaceStatus{
-		Name:    target,
-		Path:    target,
-		Present: exists(filepath.Join(root, target, "openspec", "config.yaml")),
-	}
-	changesDir := filepath.Join(root, target, "openspec", "changes")
-	entries, err := os.ReadDir(changesDir)
-	if err != nil {
-		return workspace
-	}
-	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != "archive" {
-			workspace.ActiveChanges++
-		}
-	}
-	return workspace
 }
 
 func exists(path string) bool {
