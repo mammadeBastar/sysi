@@ -486,6 +486,12 @@ func (a *App) change(args []string) error {
 	}
 
 	action, name := args[0], args[1]
+	if slugify(name) == "" {
+		return errors.New("change name must contain letters or digits")
+	}
+	if slugify(name) != name {
+		return fmt.Errorf("change name must be a lowercase slug (try %q)", slugify(name))
+	}
 	now := time.Now().UTC()
 	switch action {
 	case "propose":

@@ -3,6 +3,7 @@ package sysiapp
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -134,12 +135,6 @@ Work tasks in order. Check a task only after implementation and verification.
 `
 
 func (a *App) changePropose(root, workspace, name string, now time.Time) error {
-	if slugify(name) == "" {
-		return errors.New("change name must contain letters or digits")
-	}
-	if slugify(name) != name {
-		return fmt.Errorf("change name must be a lowercase slug (try %q)", slugify(name))
-	}
 	if name == "archive" {
 		return errors.New(`change name "archive" is reserved`)
 	}
@@ -186,10 +181,18 @@ func (a *App) changePropose(root, workspace, name string, now time.Time) error {
 func (a *App) changeApply(root, workspace, name string) error {
 	meta, err := loadChangeMeta(root, workspace, name)
 	if err != nil {
-		return fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("change %q not found in %s; available: %s", name, workspace, describeChanges(listChanges(root, workspace)))
+		}
+		return fmt.Errorf("change %q: reading meta.json: %w", name, err)
 	}
-	if meta.Status == ChangeStatusArchived {
+	switch meta.Status {
+	case ChangeStatusProposed, ChangeStatusApplying:
+		// ok
+	case ChangeStatusArchived:
 		return fmt.Errorf("change %q is archived", name)
+	default:
+		return fmt.Errorf("change %q has unexpected status %q", name, meta.Status)
 	}
 	meta.Status = ChangeStatusApplying
 	meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -203,7 +206,7 @@ func (a *App) changeApply(root, workspace, name string) error {
 	fmt.Fprintln(a.opts.Stdout, "Read proposal.md, design.md, and tasks.md before editing implementation code.")
 	fmt.Fprintln(a.opts.Stdout, "Work tasks in order with Superpowers discipline: planning, TDD, systematic debugging, verification.")
 	fmt.Fprintln(a.opts.Stdout, "Check off each task in tasks.md only after implementation and verification.")
-	fmt.Fprintln(a.opts.Stdout, "")
+	fmt.Fprintln(a.opts.Stdout)
 	fmt.Fprintln(a.opts.Stdout, "Stop and use sysi design-change if implementation reveals design drift from /system:")
 	fmt.Fprintln(a.opts.Stdout, "new or changed endpoints, payload shapes, event contracts, auth/session/permission rules,")
 	fmt.Fprintln(a.opts.Stdout, "shared error behavior, schema or data invariants, security invariants, or observability")

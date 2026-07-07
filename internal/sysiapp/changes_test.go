@@ -129,6 +129,8 @@ func TestChangeApplyMarksApplyingAndPrintsHandoff(t *testing.T) {
 		t.Fatalf("change apply failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	assertContainsAll(t, "apply handoff", out, []string{
+		"SYSI CHANGE APPLY",
+		"Status: applying",
 		"proposal.md",
 		"design.md",
 		"tasks.md",
@@ -138,8 +140,9 @@ func TestChangeApplyMarksApplyingAndPrintsHandoff(t *testing.T) {
 		"sysi design-change",
 	})
 
+	metaPath := filepath.Join(root, "api", "changes", "add-login", "meta.json")
 	var meta ChangeMeta
-	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(root, "api", "changes", "add-login", "meta.json"))), &meta); err != nil {
+	if err := json.Unmarshal([]byte(readFile(t, metaPath)), &meta); err != nil {
 		t.Fatal(err)
 	}
 	if meta.Status != ChangeStatusApplying {
@@ -149,6 +152,110 @@ func TestChangeApplyMarksApplyingAndPrintsHandoff(t *testing.T) {
 	// Re-apply is idempotent.
 	if code, _, _ := runApp(t, apiDir, "change", "apply", "add-login"); code != 0 {
 		t.Fatal("re-apply should succeed")
+	}
+	meta = ChangeMeta{}
+	if err := json.Unmarshal([]byte(readFile(t, metaPath)), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.Status != ChangeStatusApplying {
+		t.Fatalf("status after re-apply = %q, want %q", meta.Status, ChangeStatusApplying)
+	}
+}
+
+func seedChangeStatus(t *testing.T, root, workspace, name, status string) {
+	t.Helper()
+	metaPath := filepath.Join(root, workspace, "changes", name, "meta.json")
+	var meta ChangeMeta
+	if err := json.Unmarshal([]byte(readFile(t, metaPath)), &meta); err != nil {
+		t.Fatal(err)
+	}
+	meta.Status = status
+	data, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestChangeApplyRejectsPathTraversalName(t *testing.T) {
+	root := initBuildProject(t, "api,web")
+	webDir := filepath.Join(root, "web")
+	if code, _, _ := runApp(t, webDir, "change", "propose", "cross-target"); code != 0 {
+		t.Fatal("propose in web failed")
+	}
+	webMetaPath := filepath.Join(root, "web", "changes", "cross-target", "meta.json")
+	before := readFile(t, webMetaPath)
+
+	apiDir := filepath.Join(root, "api")
+	code, out, errOut := runApp(t, apiDir, "change", "apply", "../../web/changes/cross-target")
+	if code == 0 {
+		t.Fatalf("traversal name should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "slug") {
+		t.Fatalf("error should mention slug: stdout=%q stderr=%q", out, errOut)
+	}
+	if after := readFile(t, webMetaPath); after != before {
+		t.Fatalf("traversal apply mutated other workspace's change meta:\nbefore=%q\nafter=%q", before, after)
+	}
+}
+
+func TestChangeApplyCorruptMetaReportsReadError(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	metaPath := filepath.Join(root, "api", "changes", "add-login", "meta.json")
+	if err := os.WriteFile(metaPath, []byte("{broken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, apiDir, "change", "apply", "add-login")
+	if code == 0 {
+		t.Fatalf("apply with corrupt meta should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	combined := out + errOut
+	if !strings.Contains(combined, "meta.json") {
+		t.Fatalf("error should mention meta.json: %q", combined)
+	}
+	if strings.Contains(combined, "not found") {
+		t.Fatalf("corrupt meta must not be reported as not found: %q", combined)
+	}
+}
+
+func TestChangeApplyArchivedStatusErrors(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	seedChangeStatus(t, root, "api", "add-login", ChangeStatusArchived)
+
+	code, out, errOut := runApp(t, apiDir, "change", "apply", "add-login")
+	if code == 0 {
+		t.Fatalf("apply of archived change should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "archived") {
+		t.Fatalf("error should mention archived: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestChangeApplyUnexpectedStatusErrors(t *testing.T) {
+	root := initBuildProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+	seedChangeStatus(t, root, "api", "add-login", "bogus")
+
+	code, out, errOut := runApp(t, apiDir, "change", "apply", "add-login")
+	if code == 0 {
+		t.Fatalf("apply with unexpected status should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "bogus") {
+		t.Fatalf("error should name the unexpected status: stdout=%q stderr=%q", out, errOut)
 	}
 }
 
