@@ -255,6 +255,11 @@ Workspaces are the implementation directories where build changes live.`)
 	}
 
 	root := start
+	for _, ws := range workspaces {
+		if info, err := os.Stat(filepath.Join(root, ws)); err == nil && !info.IsDir() {
+			return fmt.Errorf("workspace %q conflicts with existing file %s", ws, ws)
+		}
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := State{
 		Version:       stateVersion,
@@ -610,6 +615,11 @@ func loadState(root string) (State, error) {
 	}
 	if state.Version != stateVersion {
 		return State{}, fmt.Errorf("state version %d is not supported; sysi v2 requires state version %d (v1 projects should keep using the v1 binary)", state.Version, stateVersion)
+	}
+	for _, ws := range state.Workspaces {
+		if err := validateWorkspaceName(ws); err != nil {
+			return State{}, fmt.Errorf("invalid state: %w", err)
+		}
 	}
 	if state.Phase == "" {
 		state.Phase = PhaseDesign

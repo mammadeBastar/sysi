@@ -41,7 +41,8 @@ func TestInitRequiresWorkspacesFlag(t *testing.T) {
 func TestInitScaffoldsDeclaredWorkspacesAndIsIdempotent(t *testing.T) {
 	root := t.TempDir()
 
-	code, out, errOut := runApp(t, root, "init", "--workspaces", "api,web")
+	// Uses the --workspaces=<value> equals form; other tests cover the space-separated form.
+	code, out, errOut := runApp(t, root, "init", "--workspaces=api,web")
 	if code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
@@ -101,11 +102,21 @@ func TestInitRejectsInvalidWorkspaceNames(t *testing.T) {
 			if code == 0 {
 				t.Fatalf("init should reject workspace name %q: stdout=%q stderr=%q", invalid, out, errOut)
 			}
+			if invalid != "" && !strings.Contains(out+errOut, "\""+invalid+"\"") {
+				t.Fatalf("error should mention offending name %q: stdout=%q stderr=%q", invalid, out, errOut)
+			}
+			if _, err := os.Stat(filepath.Join(root, ".sysi")); err == nil {
+				t.Fatalf("init must not create .sysi when a workspace name is invalid")
+			}
 		})
 	}
 	root := t.TempDir()
-	if code, out, errOut := runApp(t, root, "init", "--workspaces", "api,api"); code == 0 {
+	code, out, errOut := runApp(t, root, "init", "--workspaces", "api,api")
+	if code == 0 {
 		t.Fatalf("init should reject duplicate workspace names: stdout=%q stderr=%q", out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".sysi")); err == nil {
+		t.Fatalf("init must not create .sysi when workspace names are duplicated")
 	}
 }
 
@@ -133,7 +144,7 @@ func TestRoleInferenceUsesDeclaredWorkspaces(t *testing.T) {
 		}
 		var status Status
 		if err := json.Unmarshal([]byte(out), &status); err != nil {
-			t.Fatal(err)
+			t.Fatalf("status output is not json: %v\n%s", err, out)
 		}
 		if status.Role != wantRole {
 			t.Fatalf("role in %s = %q, want %q", dir, status.Role, wantRole)
@@ -157,6 +168,43 @@ func TestLoadStateRejectsV1State(t *testing.T) {
 	}
 	if !strings.Contains(out+errOut, "version") {
 		t.Fatalf("v1 state error should mention version: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestLoadStateRejectsInvalidWorkspaceNames(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".sysi"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bad := `{"version":2,"phase":"design","createdAt":"x","updatedAt":"x","workspaces":["../../escape"]}`
+	if err := os.WriteFile(filepath.Join(root, ".sysi", "state.json"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, root, "status")
+	if code == 0 {
+		t.Fatalf("status should fail on state with invalid workspace name: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "../../escape") && !strings.Contains(out+errOut, "invalid state") {
+		t.Fatalf("error should mention the bad workspace name or invalid state: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestInitRefusesWorkspaceConflictingWithFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "backend"), []byte("not a directory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, root, "init", "--workspaces", "backend")
+	if code == 0 {
+		t.Fatalf("init should fail when workspace conflicts with existing file: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "conflict") {
+		t.Fatalf("error should mention the conflict: stdout=%q stderr=%q", out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".sysi")); err == nil {
+		t.Fatalf("init must not create .sysi when a workspace conflicts with a file")
 	}
 }
 
