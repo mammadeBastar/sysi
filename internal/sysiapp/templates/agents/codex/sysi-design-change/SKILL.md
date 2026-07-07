@@ -12,7 +12,7 @@ Use this skill when build-phase work needs to mutate controlled or frozen `/syst
 1. Run or read `sysi status --json`.
 2. Run `sysi design-change <name>` or read its output.
 3. Open the created decision artifact under `system/architecture/decisions/<date>-<name>.md`.
-4. Identify the current frontend or backend OpenSpec change, if any.
+4. Identify the current workspace change(s), if any.
 5. Read the affected `/system` files before proposing edits.
 6. Check validation warnings and freeze mutations before changing anything.
 
@@ -34,12 +34,12 @@ Use this skill when build-phase work needs to mutate controlled or frozen `/syst
 
 ## Foundation Change Routing
 
-Use this table before editing. The design-change artifact must name every owner file being changed, every file only being cross-linked, and every impacted OpenSpec change.
+Use this table before editing. The design-change artifact must name every owner file being changed, every file only being cross-linked, and every impacted workspace change.
 
 | Path | Must Own | Must Not Contain | Cross-Link Instead When |
 | --- | --- | --- | --- |
 | `system/architecture/system.md` | System-wide architecture, major service/application responsibilities, communication patterns, deployment assumptions, technology decisions, and global invariants. | Endpoint schemas, event schemas, table DDL, flow steps, dashboard layouts, secret values, or implementation task lists. | The foundation change affects a boundary, schema, security invariant, operational signal, or module; summarize the architectural impact and link to the owner. |
-| `system/architecture/decisions/*.md` | Rationale, explicit confirmation, affected files, impacted OpenSpec changes, migration or compatibility notes, accepted decision, consequences, and date. | The live canonical copy of any contract, schema, security model, telemetry spec, or module definition. | Multiple owners change together; record why and point to each current owner. |
+| `system/architecture/decisions/*.md` | Rationale, explicit confirmation, affected files, impacted workspace changes, migration or compatibility notes, accepted decision, consequences, and date. | The live canonical copy of any contract, schema, security model, telemetry spec, or module definition. | Multiple owners change together; record why and point to each current owner. |
 | `system/contracts/api.yaml` | HTTP contract changes: paths, methods, params, request/response payloads, status codes, and OpenAPI components. | Flow prose, DB DDL, module internals, shared error prose, auth policy prose, or migration plans. | HTTP behavior depends on conventions, errors, auth, data, flows, or security; link to the owner instead of duplicating. |
 | `system/contracts/events.asyncapi.yaml` | Event contract changes: channels, operations, messages, producers, consumers, and AsyncAPI components. | HTTP routes, batch job internals, database schemas, operational runbooks, or replay procedures. | Event behavior depends on conventions, errors, data, observability, or flow semantics. |
 | `system/contracts/auth.md` | Authentication, authorization, sessions, tokens, roles, permissions, and boundary rules visible through APIs/events. | Secret values, encryption internals, endpoint payload copies, or full threat models. | The change alters trust boundaries, sensitive data, or security invariants; link to `system/security/model.md`. |
@@ -71,7 +71,7 @@ Do not manually edit `.sysi/` operational state. Build-phase state, freeze basel
 - If a contract change is not backward compatible, record the versioning/deprecation plan or explicitly state that no existing consumers exist.
 - If a security boundary changes, record the attacker-controlled inputs, authorization checks, sensitive data impact, audit requirement, and residual risk.
 - If observability changes are required to operate the new truth, update the relevant `system/obs/` files in the same design-change.
-- If OpenSpec artifacts conflict with the new foundation truth, update or pause those artifacts before resuming implementation.
+- If workspace change artifacts conflict with the new foundation truth, update or pause those changes before resuming implementation.
 
 ## Workflow
 
@@ -79,7 +79,7 @@ Do not manually edit `.sysi/` operational state. Build-phase state, freeze basel
 2. Use the routing table to identify exact owner files and cross-link-only files.
 3. Update the decision artifact with rationale as the working record.
 4. List affected `/system` files in the decision artifact.
-5. List impacted OpenSpec changes and implementation tasks in the decision artifact.
+5. List impacted workspace changes and implementation tasks in the decision artifact.
 6. Describe migration or compatibility notes for already-built code, data, APIs, events, clients, security, and operations.
 7. Ask for explicit user confirmation before editing controlled or frozen files.
 8. Apply the smallest coherent `/system` mutation after confirmation.
@@ -89,13 +89,13 @@ Do not manually edit `.sysi/` operational state. Build-phase state, freeze basel
 ## Validation
 
 - Capture the before and after state of affected files in the conversation summary.
-- Confirm the decision artifact records rationale, affected files, impacted OpenSpec changes, compatibility notes, confirmation, decision, and consequences.
+- Confirm the decision artifact records rationale, affected files, impacted workspace changes, compatibility notes, confirmation, decision, and consequences.
 - Confirm every changed fact has exactly one owning file.
 - Confirm duplicate-looking facts are replaced with cross-links.
 - Confirm edited `/system` files do not conflict.
 - Confirm security changes are captured in `system/security/model.md` when they affect trust boundaries, sensitive data, secrets, or security invariants.
 - Confirm schema evolution keeps `system/data/schema.sql`, `system/data/schema.md`, and database detail files aligned.
-- Confirm impacted OpenSpec changes still describe the intended implementation.
+- Confirm impacted workspace changes still describe the intended implementation.
 - Confirm validation warnings are understood after the mutation.
 - Confirm new foundation truth is precise enough for future agents.
 
@@ -103,7 +103,7 @@ Do not manually edit `.sysi/` operational state. Build-phase state, freeze basel
 
 - Stop if the user has not given explicit user confirmation for controlled or frozen file edits.
 - Stop if affected owner files cannot be identified from the routing table.
-- Stop if impacted OpenSpec changes are unknown and the mutation would change implementation scope.
+- Stop if impacted workspace changes are unknown and the mutation would change implementation scope.
 - Stop if migration or compatibility notes are required but missing.
 - Stop if the proposed change would make `/system` internally inconsistent.
 
@@ -113,5 +113,5 @@ Do not manually edit `.sysi/` operational state. Build-phase state, freeze basel
 - Do Not use this skill for ordinary code changes.
 - Do Not make broad rewrites when a smaller foundation correction is enough.
 - Do Not edit implementation code before the foundation change is accepted.
-- Do Not leave OpenSpec artifacts inconsistent with changed `/system` truth.
+- Do Not leave workspace changes inconsistent with changed `/system` truth.
 - Do Not write secrets, credentials, tokens, private keys, or production sensitive values into `/system`.

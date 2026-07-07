@@ -548,7 +548,7 @@ func TestDesignChangeCreatesDatedDecisionArtifact(t *testing.T) {
 		"Status: proposed",
 		"## Rationale",
 		"## Affected System Files",
-		"## Impacted OpenSpec Changes",
+		"## Impacted Changes",
 		"## Migration Or Compatibility Notes",
 	})
 	if !strings.Contains(out, filepath.Base(matches[0])) {
@@ -556,7 +556,7 @@ func TestDesignChangeCreatesDatedDecisionArtifact(t *testing.T) {
 	}
 }
 
-func TestDesignCommandsDoNotRequireOpenSpec(t *testing.T) {
+func TestDesignGuidanceDoesNotMentionOpenSpec(t *testing.T) {
 	root := t.TempDir()
 	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
@@ -566,8 +566,11 @@ func TestDesignCommandsDoNotRequireOpenSpec(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("explore failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
-	if !strings.Contains(out, "auth") || strings.Contains(out, "openspec new") {
+	if !strings.Contains(out, "auth") {
 		t.Fatalf("explore output did not look like design guidance: %q", out)
+	}
+	if strings.Contains(out, "OpenSpec") {
+		t.Fatalf("design guidance should not mention OpenSpec: %q", out)
 	}
 
 	code, out, errOut = runApp(t, root, "capture")
@@ -694,7 +697,7 @@ func TestCodexInstructionPacksContainOperationalGuardrails(t *testing.T) {
 			"explicit user confirmation",
 			"decision artifact",
 			"migration or compatibility notes",
-			"impacted OpenSpec changes",
+			"impacted workspace changes",
 			"## Foundation Change Routing",
 			"Must Own",
 			"Must Not Contain",
@@ -737,7 +740,7 @@ func TestCursorAndClaudeInstructionsContainWorkflowBoundaries(t *testing.T) {
 	markers := []string{
 		"phase boundaries",
 		"/system",
-		"OpenSpec",
+		"sysi change",
 		"sysi design-change",
 		"role",
 		"minimal",

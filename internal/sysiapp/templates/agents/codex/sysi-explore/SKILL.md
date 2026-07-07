@@ -1,6 +1,6 @@
 ---
 name: sysi-explore
-description: Explore system design using /system as the current project truth. Does not create OpenSpec changes during design phase.
+description: Explore system design using /system as the current project truth. Does not create build changes during design phase.
 ---
 
 ## Purpose
@@ -24,7 +24,7 @@ Use this skill as a principal-engineer design review partner when the user wants
 ## Phase Rules
 
 - Design phase is the normal phase for this skill.
-- During design phase, do not create OpenSpec changes for design exploration.
+- During design phase, do not create build changes for design exploration.
 - During build phase, use this skill only for understanding existing foundation truth; do not mutate controlled or frozen files.
 - If exploration reveals that build-phase foundation truth must change, stop and direct the user to `sysi design-change`.
 
@@ -85,8 +85,8 @@ Scale depth to risk. For a small local feature, use the lens lightly. For a foun
 ## Do Not
 
 - Do Not implement code or edit application files.
-- Do Not skip design work; avoid implementation until a build-phase OpenSpec change exists.
-- Do Not create OpenSpec changes during design phase.
+- Do Not skip design work; avoid implementation until a build-phase sysi change exists.
+- Do Not create build changes during design phase.
 - Do Not capture tentative ideas as final truth.
 - Do Not read broad codebase context when allowed `/system` files are sufficient.
 - Do Not hide uncertainty; label open questions directly.

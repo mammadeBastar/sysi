@@ -407,7 +407,7 @@ func (a *App) explore(args []string) error {
 	fmt.Fprintf(a.opts.Stdout, "SYSI EXPLORE\n\nTopic: %s\nPhase: %s\nRole: %s\n\n", topic, state.Phase, role)
 	fmt.Fprintln(a.opts.Stdout, "Use current /system files as the project foundation.")
 	fmt.Fprintln(a.opts.Stdout, "Explore architecture, contracts, contract conventions, contract errors, flows, modules, data, security, and observability as relevant.")
-	fmt.Fprintln(a.opts.Stdout, "During design phase, do not create OpenSpec changes.")
+	fmt.Fprintln(a.opts.Stdout, "During design phase, do not create build changes; capture decisions into /system.")
 	fmt.Fprintln(a.opts.Stdout, "When decisions are final, invoke sysi capture or the Codex sysi-capture skill.")
 	fmt.Fprintln(a.opts.Stdout, "\nAllowed system files:")
 	for _, allowed := range allowlistForRole(root, role) {
@@ -456,7 +456,7 @@ func (a *App) designChange(args []string) error {
 	fmt.Fprintf(a.opts.Stdout, "Phase: %s\n", state.Phase)
 	fmt.Fprintf(a.opts.Stdout, "Root: %s\n\n", root)
 	fmt.Fprintf(a.opts.Stdout, "Artifact: %s\n\n", filepath.ToSlash(relArtifact))
-	fmt.Fprintln(a.opts.Stdout, "Record rationale, affected /system files, impacted OpenSpec changes, and migration notes before mutating frozen foundation files.")
+	fmt.Fprintln(a.opts.Stdout, "Record rationale, affected /system files, impacted workspace changes, and migration notes before mutating frozen foundation files.")
 	return nil
 }
 
@@ -815,16 +815,15 @@ Date: %s
 
 ## Rationale
 
-Describe why normal OpenSpec apply work cannot continue without changing foundation truth.
+Describe why normal build change work cannot continue without changing foundation truth.
 
 ## Affected System Files
 
 - TBD
 
-## Impacted OpenSpec Changes
+## Impacted Changes
 
-- frontend: TBD
-- backend: TBD
+- List impacted workspace changes as workspace: change-name.
 
 ## Migration Or Compatibility Notes
 

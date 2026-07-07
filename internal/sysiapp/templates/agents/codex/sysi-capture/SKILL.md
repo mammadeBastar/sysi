@@ -19,7 +19,7 @@ Use this skill after the user has made a Finalized Decision and wants it written
 
 - Design phase allows normal capture into `/system`.
 - Build phase blocks normal capture. If status shows build phase, stop and use `sysi design-change`.
-- Do not use OpenSpec for design-phase capture.
+- Do not use build changes for design-phase capture.
 - Do not turn implementation discoveries into foundation mutations without a finalized user decision.
 
 ## Role And File Access
@@ -117,7 +117,7 @@ Use concise filenames under `system/architecture/decisions/`, such as `auth-sess
 ## Do Not
 
 - Do Not capture brainstorming notes as final architecture.
-- Do Not create OpenSpec changes during design phase.
+- Do Not create build changes during design phase.
 - Do Not edit implementation files.
 - Do Not duplicate full contracts, schemas, or flow details in unrelated files.
 - Do Not bypass `sysi design-change` in build phase.
