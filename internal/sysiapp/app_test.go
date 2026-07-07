@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -23,25 +22,26 @@ func runApp(t *testing.T, dir string, args ...string) (int, string, string) {
 	return code, stdout.String(), stderr.String()
 }
 
-func runAppWithOpenSpec(t *testing.T, dir, openspecPath string, args ...string) (int, string, string) {
-	t.Helper()
+func TestInitRequiresWorkspacesFlag(t *testing.T) {
+	root := t.TempDir()
 
-	var stdout, stderr bytes.Buffer
-	code := New(Options{
-		Dir:          dir,
-		Stdout:       &stdout,
-		Stderr:       &stderr,
-		OpenSpecPath: openspecPath,
-	}).Run(args)
-
-	return code, stdout.String(), stderr.String()
+	code, out, errOut := runApp(t, root, "init")
+	if code == 0 {
+		t.Fatalf("bare init should fail when not initialized: stdout=%q stderr=%q", out, errOut)
+	}
+	assertContainsAll(t, "bare init guidance", out+errOut, []string{
+		"--workspaces",
+		"sysi init --workspaces frontend,backend",
+	})
+	if _, err := os.Stat(filepath.Join(root, ".sysi")); err == nil {
+		t.Fatalf("bare init must not create .sysi")
+	}
 }
 
-func TestInitScaffoldsProjectAndIsIdempotent(t *testing.T) {
+func TestInitScaffoldsDeclaredWorkspacesAndIsIdempotent(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, logPath := writeFakeOpenSpec(t, root)
 
-	code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init")
+	code, out, errOut := runApp(t, root, "init", "--workspaces", "api,web")
 	if code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
@@ -52,64 +52,117 @@ func TestInitScaffoldsProjectAndIsIdempotent(t *testing.T) {
 		".sysi/allowlists.json",
 		"system/architecture/system.md",
 		"system/contracts/api.yaml",
-		"system/contracts/events.asyncapi.yaml",
-		"system/contracts/auth.md",
 		"system/contracts/conventions.md",
 		"system/contracts/errors.md",
-		"system/modules/frontend.md",
-		"system/modules/backend.md",
+		"system/modules/api.md",
+		"system/modules/web.md",
 		"system/security/model.md",
 		"system/data/schema.sql",
-		"system/data/schema.md",
-		"system/data/db/indexes.md",
 		"system/obs/dashboards/grafana.md",
-		"frontend/openspec/config.yaml",
-		"backend/openspec/config.yaml",
 	}
-
 	for _, rel := range wantFiles {
 		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
 			t.Fatalf("expected %s to exist: %v", rel, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "openspec", "config.yaml")); err == nil {
-		t.Fatalf("root openspec/config.yaml should not be initialized by sysi init")
-	}
-	if _, err := os.Stat(filepath.Join(root, "system", "openspec", "config.yaml")); err == nil {
-		t.Fatalf("system/openspec/config.yaml should not be initialized by sysi init")
-	}
-	log := readFile(t, logPath)
-	assertContainsAll(t, "openspec log", log, []string{
-		"init frontend --tools none",
-		"init backend --tools none",
-	})
-	if strings.Contains(log, "init .") || strings.Contains(log, "init system") {
-		t.Fatalf("openspec init should only target frontend/backend, got:\n%s", log)
+	for _, ws := range []string{"api", "web"} {
+		info, err := os.Stat(filepath.Join(root, ws, "changes"))
+		if err != nil || !info.IsDir() {
+			t.Fatalf("expected %s/changes directory: %v", ws, err)
+		}
 	}
 
-	if err := os.Remove(filepath.Join(root, "backend", "openspec", "config.yaml")); err != nil {
+	var state State
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(root, ".sysi", "state.json"))), &state); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut = runAppWithOpenSpec(t, root, fakeOpenSpec, "init")
+	if state.Version != 2 {
+		t.Fatalf("state version = %d, want 2", state.Version)
+	}
+	if strings.Join(state.Workspaces, ",") != "api,web" {
+		t.Fatalf("workspaces = %v, want [api web]", state.Workspaces)
+	}
+
+	// Idempotent: bare re-run reports already initialized, no flag needed.
+	code, out, errOut = runApp(t, root, "init")
 	if code != 0 {
 		t.Fatalf("second init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	if !strings.Contains(out, "already initialized") {
 		t.Fatalf("second init should report already initialized, got %q", out)
 	}
-	log = readFile(t, logPath)
-	if strings.Count(log, "init frontend --tools none") != 1 {
-		t.Fatalf("frontend should not be reinitialized when config exists:\n%s", log)
+}
+
+func TestInitRejectsInvalidWorkspaceNames(t *testing.T) {
+	for _, invalid := range []string{"system", "Api", "a b", "-api", ""} {
+		t.Run(invalid, func(t *testing.T) {
+			root := t.TempDir()
+			code, out, errOut := runApp(t, root, "init", "--workspaces", "good,"+invalid)
+			if code == 0 {
+				t.Fatalf("init should reject workspace name %q: stdout=%q stderr=%q", invalid, out, errOut)
+			}
+		})
 	}
-	if strings.Count(log, "init backend --tools none") != 2 {
-		t.Fatalf("backend should be initialized again after config is missing:\n%s", log)
+	root := t.TempDir()
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "api,api"); code == 0 {
+		t.Fatalf("init should reject duplicate workspace names: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestRoleInferenceUsesDeclaredWorkspaces(t *testing.T) {
+	root := t.TempDir()
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "api,web"); code != 0 {
+		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+
+	apiDir := filepath.Join(root, "api", "handlers")
+	if err := os.MkdirAll(apiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := map[string]string{
+		root:                          RoleDesign,
+		apiDir:                        "api",
+		filepath.Join(root, "system"): RoleSystem,
+		filepath.Join(root, "web"):    "web",
+	}
+	for dir, wantRole := range cases {
+		code, out, errOut := runApp(t, dir, "status", "--json")
+		if code != 0 {
+			t.Fatalf("status in %s failed: code=%d stdout=%q stderr=%q", dir, code, out, errOut)
+		}
+		var status Status
+		if err := json.Unmarshal([]byte(out), &status); err != nil {
+			t.Fatal(err)
+		}
+		if status.Role != wantRole {
+			t.Fatalf("role in %s = %q, want %q", dir, status.Role, wantRole)
+		}
+	}
+}
+
+func TestLoadStateRejectsV1State(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".sysi"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	v1 := `{"version":1,"phase":"design","createdAt":"x","updatedAt":"x"}`
+	if err := os.WriteFile(filepath.Join(root, ".sysi", "state.json"), []byte(v1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, root, "status")
+	if code == 0 {
+		t.Fatalf("status should fail on v1 state: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "version") {
+		t.Fatalf("v1 state error should mention version: stdout=%q stderr=%q", out, errOut)
 	}
 }
 
 func TestRootDiscoveryAndStatusJSON(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -133,97 +186,16 @@ func TestRootDiscoveryAndStatusJSON(t *testing.T) {
 	if status.Phase != PhaseDesign {
 		t.Fatalf("phase = %q, want %q", status.Phase, PhaseDesign)
 	}
-	if status.Role != RoleFrontend {
-		t.Fatalf("role = %q, want %q", status.Role, RoleFrontend)
+	if status.Role != "frontend" {
+		t.Fatalf("role = %q, want %q", status.Role, "frontend")
 	}
 
 	var allowlists map[string][]string
 	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(root, ".sysi", "allowlists.json"))), &allowlists); err != nil {
 		t.Fatal(err)
 	}
-	assertContainsAll(t, "frontend allowlist", strings.Join(allowlists[RoleFrontend], "\n"), []string{"system/security/**"})
-	assertContainsAll(t, "backend allowlist", strings.Join(allowlists[RoleBackend], "\n"), []string{"system/security/**"})
-}
-
-func TestStatusAggregatesImplementationOpenSpecWorkspacesOnly(t *testing.T) {
-	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
-		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
-	}
-
-	for _, rel := range []string{
-		"openspec/changes/root-change",
-		"frontend/openspec/changes/add-login",
-		"frontend/openspec/changes/archive/old-ui",
-		"backend/openspec/changes/add-api",
-	} {
-		if err := os.MkdirAll(filepath.Join(root, rel), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	code, out, errOut := runApp(t, root, "status", "--json")
-	if code != 0 {
-		t.Fatalf("status json failed: code=%d stdout=%q stderr=%q", code, out, errOut)
-	}
-
-	var status map[string]any
-	if err := json.Unmarshal([]byte(out), &status); err != nil {
-		t.Fatalf("status output is not json: %v\n%s", err, out)
-	}
-	openspecStatus := status["openspec"].(map[string]any)
-	if got := int(openspecStatus["activeChanges"].(float64)); got != 2 {
-		t.Fatalf("active OpenSpec changes = %d, want 2; full status:\n%s", got, out)
-	}
-	workspaces := openspecStatus["workspaces"].([]any)
-	if len(workspaces) != 2 {
-		t.Fatalf("workspace count = %d, want 2; full status:\n%s", len(workspaces), out)
-	}
-	wantCounts := map[string]int{"frontend": 1, "backend": 1}
-	for _, raw := range workspaces {
-		workspace := raw.(map[string]any)
-		name := workspace["name"].(string)
-		if got, want := int(workspace["activeChanges"].(float64)), wantCounts[name]; got != want {
-			t.Fatalf("%s active changes = %d, want %d; full status:\n%s", name, got, want, out)
-		}
-		if !workspace["present"].(bool) {
-			t.Fatalf("%s workspace should be present; full status:\n%s", name, out)
-		}
-	}
-}
-
-func TestInitUsesSysiOpenSpecEnvironment(t *testing.T) {
-	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	t.Setenv("SYSI_OPENSPEC", fakeOpenSpec)
-
-	code, out, errOut := runApp(t, root, "init")
-	if code != 0 {
-		t.Fatalf("init failed with SYSI_OPENSPEC: code=%d stdout=%q stderr=%q", code, out, errOut)
-	}
-	if _, err := os.Stat(filepath.Join(root, ".sysi", "state.json")); err != nil {
-		t.Fatalf("expected .sysi/state.json to exist: %v", err)
-	}
-}
-
-func TestValidateReportsMissingImplementationOpenSpecWorkspace(t *testing.T) {
-	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
-		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
-	}
-	if err := os.Remove(filepath.Join(root, "backend", "openspec", "config.yaml")); err != nil {
-		t.Fatal(err)
-	}
-
-	code, out, errOut := runApp(t, root, "validate")
-	if code == 0 {
-		t.Fatalf("validate should fail when backend OpenSpec workspace is missing: stdout=%q stderr=%q", out, errOut)
-	}
-	if !strings.Contains(out+errOut, "backend/openspec/config.yaml") {
-		t.Fatalf("missing workspace warning not found in output: stdout=%q stderr=%q", out, errOut)
-	}
+	assertContainsAll(t, "frontend allowlist", strings.Join(allowlists["frontend"], "\n"), []string{"system/security/**"})
+	assertContainsAll(t, "backend allowlist", strings.Join(allowlists["backend"], "\n"), []string{"system/security/**"})
 }
 
 func TestValidateReportsMissingRequiredSystemFile(t *testing.T) {
@@ -235,8 +207,7 @@ func TestValidateReportsMissingRequiredSystemFile(t *testing.T) {
 	} {
 		t.Run(rel, func(t *testing.T) {
 			root := t.TempDir()
-			fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-			if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+			if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 				t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 			}
 			if err := os.Remove(filepath.Join(root, rel)); err != nil {
@@ -256,8 +227,7 @@ func TestValidateReportsMissingRequiredSystemFile(t *testing.T) {
 
 func TestDesignFreezeRecordsBaselineAndCaptureBlocksInBuild(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -306,8 +276,7 @@ func TestDesignFreezeRecordsBaselineAndCaptureBlocksInBuild(t *testing.T) {
 
 func TestDesignCommandsMentionExpandedFoundationTargets(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -340,8 +309,7 @@ func TestDesignCommandsMentionExpandedFoundationTargets(t *testing.T) {
 
 func TestDesignChangeCreatesDatedDecisionArtifact(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	if code, out, errOut := runApp(t, root, "design", "freeze"); code != 0 {
@@ -376,8 +344,7 @@ func TestDesignChangeCreatesDatedDecisionArtifact(t *testing.T) {
 
 func TestDesignCommandsDoNotRequireOpenSpec(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -400,8 +367,7 @@ func TestDesignCommandsDoNotRequireOpenSpec(t *testing.T) {
 
 func TestAgentInstallersGenerateExpectedFilesAndPreserveClaudeContent(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -442,8 +408,7 @@ func TestAgentInstallersGenerateExpectedFilesAndPreserveClaudeContent(t *testing
 
 func TestCodexInstructionPacksContainOperationalGuardrails(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	if code, out, errOut := runApp(t, root, "agent", "install", "codex"); code != 0 {
@@ -543,8 +508,7 @@ func TestCodexInstructionPacksContainOperationalGuardrails(t *testing.T) {
 
 func TestCursorAndClaudeInstructionsContainWorkflowBoundaries(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	for _, agent := range []string{"cursor", "claude"} {
@@ -572,8 +536,7 @@ func TestCursorAndClaudeInstructionsContainWorkflowBoundaries(t *testing.T) {
 
 func TestClaudeInstallReplacesOnlyManagedSection(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -603,8 +566,7 @@ func TestClaudeInstallReplacesOnlyManagedSection(t *testing.T) {
 
 func TestAgentInstallCommandNamesRemainStable(t *testing.T) {
 	root := t.TempDir()
-	fakeOpenSpec, _ := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fakeOpenSpec, "init"); code != 0 {
+	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
 		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 
@@ -615,90 +577,6 @@ func TestAgentInstallCommandNamesRemainStable(t *testing.T) {
 	if !strings.Contains(out, "sysi agent install codex|cursor|claude") {
 		t.Fatalf("help output should keep stable agent install command names:\n%s", out)
 	}
-}
-
-func TestBuildWorkflowUsesFakeOpenSpecInBuildPhase(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell-script fake executable is POSIX-only")
-	}
-
-	root := t.TempDir()
-	fake, logPath := writeFakeOpenSpec(t, root)
-	if code, out, errOut := runAppWithOpenSpec(t, root, fake, "init"); code != 0 {
-		t.Fatalf("init failed: code=%d stdout=%q stderr=%q", code, out, errOut)
-	}
-
-	code, out, errOut := runApp(t, root, "change", "propose", "add-login")
-	if code == 0 {
-		t.Fatalf("change propose should fail before build phase: stdout=%q stderr=%q", out, errOut)
-	}
-
-	if code, out, errOut := runApp(t, root, "design", "freeze"); code != 0 {
-		t.Fatalf("freeze failed: code=%d stdout=%q stderr=%q", code, out, errOut)
-	}
-
-	frontendDir := filepath.Join(root, "frontend")
-
-	var stdout, stderr bytes.Buffer
-	code = New(Options{Dir: frontendDir, Stdout: &stdout, Stderr: &stderr, OpenSpecPath: fake}).Run([]string{"change", "propose", "add-login"})
-	if code != 0 {
-		t.Fatalf("change propose failed: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	code = New(Options{Dir: frontendDir, Stdout: &stdout, Stderr: &stderr, OpenSpecPath: fake}).Run([]string{"change", "apply", "add-login"})
-	if code != 0 {
-		t.Fatalf("change apply failed: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "OpenSpec apply") || !strings.Contains(stdout.String(), "Superpowers") {
-		t.Fatalf("apply output should mention OpenSpec apply and Superpowers discipline: %q", stdout.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	code = New(Options{Dir: frontendDir, Stdout: &stdout, Stderr: &stderr, OpenSpecPath: fake}).Run([]string{"change", "archive", "add-login"})
-	if code != 0 {
-		t.Fatalf("change archive failed: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
-	}
-
-	logBytes, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	log := string(logBytes)
-	if !strings.Contains(log, frontendDir+"|new change add-login") ||
-		!strings.Contains(log, frontendDir+"|instructions apply --change add-login --json") ||
-		!strings.Contains(log, frontendDir+"|archive add-login") {
-		t.Fatalf("fake openspec did not receive expected calls:\n%s", log)
-	}
-	if _, err := os.Stat(filepath.Join(root, "openspec", "changes", "add-login")); err == nil {
-		t.Fatalf("root OpenSpec change should not be created by frontend build command")
-	}
-}
-
-func writeFakeOpenSpec(t *testing.T, root string) (string, string) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("shell-script fake executable is POSIX-only")
-	}
-
-	logPath := filepath.Join(root, "openspec.log")
-	fake := filepath.Join(root, "fake-openspec")
-	script := "#!/bin/sh\n" +
-		"printf '%s|%s\\n' \"$PWD\" \"$*\" >> " + shellQuote(logPath) + "\n" +
-		"if [ \"$1\" = \"init\" ]; then mkdir -p \"$2/openspec\"; echo 'project: fake' > \"$2/openspec/config.yaml\"; fi\n" +
-		"if [ \"$1\" = \"new\" ]; then mkdir -p openspec/changes/add-login; fi\n" +
-		"if [ \"$1\" = \"instructions\" ] && [ \"$2\" = \"apply\" ]; then echo '{\"state\":\"ready\"}'; fi\n" +
-		"exit 0\n"
-	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return fake, logPath
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func readFile(t *testing.T, path string) string {

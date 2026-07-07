@@ -22,11 +22,10 @@ const (
 	PhaseDesign = "design"
 	PhaseBuild  = "build"
 
-	RoleDesign   = "design"
-	RoleFrontend = "frontend"
-	RoleBackend  = "backend"
-	RoleSystem   = "system-maintainer"
-	RoleChange   = "change"
+	RoleDesign = "design"
+	RoleSystem = "system-maintainer"
+
+	stateVersion = 2
 )
 
 type Options struct {
@@ -46,6 +45,7 @@ type State struct {
 	Phase         string            `json:"phase"`
 	CreatedAt     string            `json:"createdAt"`
 	UpdatedAt     string            `json:"updatedAt"`
+	Workspaces    []string          `json:"workspaces"`
 	AgentInstalls map[string]string `json:"agentInstalls,omitempty"`
 }
 
@@ -97,15 +97,13 @@ type Status struct {
 	OpenSpec   OpenSpecStatus `json:"openspec"`
 }
 
-var requiredSystemFiles = []string{
+var baseRequiredSystemFiles = []string{
 	"system/architecture/system.md",
 	"system/contracts/api.yaml",
 	"system/contracts/events.asyncapi.yaml",
 	"system/contracts/auth.md",
 	"system/contracts/conventions.md",
 	"system/contracts/errors.md",
-	"system/modules/frontend.md",
-	"system/modules/backend.md",
 	"system/security/model.md",
 	"system/data/schema.sql",
 	"system/data/schema.md",
@@ -117,6 +115,14 @@ var requiredSystemFiles = []string{
 	"system/obs/tracing.md",
 	"system/obs/alerts.md",
 	"system/obs/dashboards/grafana.md",
+}
+
+func requiredSystemFiles(workspaces []string) []string {
+	files := append([]string(nil), baseRequiredSystemFiles...)
+	for _, ws := range workspaces {
+		files = append(files, "system/modules/"+ws+".md")
+	}
+	return files
 }
 
 var controlledSystemFiles = []string{
@@ -164,7 +170,7 @@ func (a *App) Run(args []string) int {
 	var err error
 	switch args[0] {
 	case "init":
-		err = a.init()
+		err = a.init(args[1:])
 	case "status":
 		err = a.status(args[1:])
 	case "validate":
@@ -207,32 +213,55 @@ Usage:
   sysi agent install codex|cursor|claude`)
 }
 
-func (a *App) init() error {
+func (a *App) init(args []string) error {
 	start, err := filepath.Abs(a.opts.Dir)
 	if err != nil {
 		return err
 	}
 	if root, ok := findRoot(start); ok {
-		if err := scaffoldSystem(root); err != nil {
+		state, err := loadState(root)
+		if err != nil {
 			return err
 		}
-		if err := ensureAllowlists(root); err != nil {
+		if err := scaffoldSystem(root, state.Workspaces); err != nil {
 			return err
 		}
-		if err := a.ensureImplementationOpenSpec(root); err != nil {
+		if err := ensureAllowlists(root, state.Workspaces); err != nil {
+			return err
+		}
+		if err := ensureWorkspaceDirs(root, state.Workspaces); err != nil {
 			return err
 		}
 		fmt.Fprintf(a.opts.Stdout, "sysi already initialized at %s\n", root)
 		return nil
 	}
 
+	workspaces, flagGiven, err := parseWorkspacesFlag(args)
+	if err != nil {
+		return err
+	}
+	if !flagGiven || len(workspaces) == 0 {
+		fmt.Fprintln(a.opts.Stdout, `sysi init requires declared workspaces.
+
+Usage:
+  sysi init --workspaces <name>[,<name>...]
+
+Examples:
+  sysi init --workspaces frontend,backend
+  sysi init --workspaces api,web,worker
+
+Workspaces are the implementation directories where build changes live.`)
+		return errors.New("missing --workspaces")
+	}
+
 	root := start
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := State{
-		Version:       1,
+		Version:       stateVersion,
 		Phase:         PhaseDesign,
 		CreatedAt:     now,
 		UpdatedAt:     now,
+		Workspaces:    workspaces,
 		AgentInstalls: map[string]string{},
 	}
 
@@ -248,17 +277,18 @@ func (a *App) init() error {
 	if err := saveJSON(filepath.Join(root, ".sysi", "freeze.json"), Freeze{Files: map[string]FreezeFile{}}); err != nil {
 		return err
 	}
-	if err := saveJSON(filepath.Join(root, ".sysi", "allowlists.json"), defaultAllowlists()); err != nil {
+	if err := saveJSON(filepath.Join(root, ".sysi", "allowlists.json"), defaultAllowlists(workspaces)); err != nil {
 		return err
 	}
-	if err := scaffoldSystem(root); err != nil {
+	if err := scaffoldSystem(root, workspaces); err != nil {
 		return err
 	}
-	if err := a.ensureImplementationOpenSpec(root); err != nil {
+	if err := ensureWorkspaceDirs(root, workspaces); err != nil {
 		return err
 	}
 
 	fmt.Fprintf(a.opts.Stdout, "initialized sysi repository at %s\n", root)
+	fmt.Fprintf(a.opts.Stdout, "workspaces: %s\n", strings.Join(workspaces, ", "))
 	fmt.Fprintln(a.opts.Stdout, "next: sysi status")
 	return nil
 }
@@ -374,7 +404,7 @@ func (a *App) explore(args []string) error {
 	if len(args) > 0 {
 		topic = strings.Join(args, " ")
 	}
-	role := inferRole(root, a.opts.Dir)
+	role := inferRole(root, a.opts.Dir, state.Workspaces)
 	fmt.Fprintf(a.opts.Stdout, "SYSI EXPLORE\n\nTopic: %s\nPhase: %s\nRole: %s\n\n", topic, state.Phase, role)
 	fmt.Fprintln(a.opts.Stdout, "Use current /system files as the project foundation.")
 	fmt.Fprintln(a.opts.Stdout, "Explore architecture, contracts, contract conventions, contract errors, flows, modules, data, security, and observability as relevant.")
@@ -523,7 +553,7 @@ func (a *App) buildStatus(root string, state State) (Status, error) {
 	return Status{
 		Root:       root,
 		Phase:      state.Phase,
-		Role:       inferRole(root, a.opts.Dir),
+		Role:       inferRole(root, a.opts.Dir, state.Workspaces),
 		Validation: validation,
 		Freeze:     freezeStatus,
 		Agents:     agentStatus(root),
@@ -578,6 +608,9 @@ func loadState(root string) (State, error) {
 	if err := loadJSON(filepath.Join(root, ".sysi", "state.json"), &state); err != nil {
 		return State{}, err
 	}
+	if state.Version != stateVersion {
+		return State{}, fmt.Errorf("state version %d is not supported; sysi v2 requires state version %d (v1 projects should keep using the v1 binary)", state.Version, stateVersion)
+	}
 	if state.Phase == "" {
 		state.Phase = PhaseDesign
 	}
@@ -622,7 +655,7 @@ func loadJSON(path string, value any) error {
 	return json.Unmarshal(data, value)
 }
 
-func scaffoldSystem(root string) error {
+func scaffoldSystem(root string, workspaces []string) error {
 	dirs := []string{
 		"system/architecture/decisions",
 		"system/contracts",
@@ -644,8 +677,6 @@ func scaffoldSystem(root string) error {
 		"system/contracts/auth.md":              "# Auth Contract\n\nDescribe authentication, authorization, sessions, tokens, permissions, and boundary rules.\n",
 		"system/contracts/conventions.md":       "# Contract Conventions\n\nDescribe cross-cutting API and event conventions: pagination, filtering, sorting, idempotency, correlation IDs, timestamps, versioning, deprecation, and rate-limit expression.\n",
 		"system/contracts/errors.md":            "# Error Contract\n\nDescribe error envelopes, error codes, retryability, validation failures, and user-facing versus internal error boundaries.\n",
-		"system/modules/frontend.md":            "# Frontend Modules\n\nDescribe Next.js pages, components, responsibilities, and dependencies.\n",
-		"system/modules/backend.md":             "# Backend Modules\n\nDescribe Go services, modules, responsibilities, and dependencies.\n",
 		"system/security/model.md":              "# Security Model\n\nDescribe trust boundaries, sensitive data rules, encryption expectations, secret handling, security invariants, and threat assumptions. Do not store secret values here.\n",
 		"system/data/schema.sql":                "-- Canonical Postgres schema.\n",
 		"system/data/schema.md":                 "# Data Schema\n\nExplain database tables, relationships, invariants, protobuf files, and schema rationale. `schema.sql` is canonical for Postgres.\n",
@@ -663,6 +694,12 @@ func scaffoldSystem(root string) error {
 			return err
 		}
 	}
+	for _, ws := range workspaces {
+		content := fmt.Sprintf("# %s Modules\n\nDescribe %s components, responsibilities, and dependencies.\n", ws, ws)
+		if err := writeFileIfMissing(filepath.Join(root, "system", "modules", ws+".md"), content); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -676,8 +713,8 @@ func writeFileIfMissing(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-func ensureAllowlists(root string) error {
-	defaults := defaultAllowlists()
+func ensureAllowlists(root string, workspaces []string) error {
+	defaults := defaultAllowlists(workspaces)
 	var existing map[string][]string
 	if err := loadJSON(filepath.Join(root, ".sysi", "allowlists.json"), &existing); err != nil {
 		existing = map[string][]string{}
@@ -709,14 +746,7 @@ func containsString(values []string, want string) bool {
 }
 
 func (a *App) requireImplementationOpenSpecDir(root string) (string, error) {
-	switch inferRole(root, a.opts.Dir) {
-	case RoleFrontend:
-		return filepath.Join(root, "frontend"), nil
-	case RoleBackend:
-		return filepath.Join(root, "backend"), nil
-	default:
-		return "", errors.New("build changes require an implementation workspace; run from frontend/ or backend/")
-	}
+	return "", errors.New("build changes require an implementation workspace")
 }
 
 func (a *App) ensureImplementationOpenSpec(root string) error {
@@ -734,41 +764,29 @@ func (a *App) ensureImplementationOpenSpec(root string) error {
 	return nil
 }
 
-func defaultAllowlists() map[string][]string {
-	return map[string][]string{
-		RoleDesign: {
-			"system/**",
-		},
-		RoleFrontend: {
+func defaultAllowlists(workspaces []string) map[string][]string {
+	lists := map[string][]string{
+		RoleDesign: {"system/**"},
+		RoleSystem: {"system/**"},
+	}
+	for _, ws := range workspaces {
+		lists[ws] = []string{
 			"system/architecture/system.md",
 			"system/contracts/**",
 			"system/flows/**",
-			"system/modules/frontend.md",
-			"system/security/**",
-		},
-		RoleBackend: {
-			"system/architecture/system.md",
-			"system/contracts/**",
-			"system/flows/**",
-			"system/modules/backend.md",
+			"system/modules/" + ws + ".md",
 			"system/data/**",
 			"system/obs/**",
 			"system/security/**",
-		},
-		RoleSystem: {
-			"system/**",
-		},
-		RoleChange: {
-			"openspec/changes/**",
-			"system/**",
-		},
+		}
 	}
+	return lists
 }
 
 func allowlistForRole(root, role string) []string {
 	var lists map[string][]string
 	if err := loadJSON(filepath.Join(root, ".sysi", "allowlists.json"), &lists); err != nil {
-		lists = defaultAllowlists()
+		lists = map[string][]string{RoleDesign: {"system/**"}, RoleSystem: {"system/**"}}
 	}
 	allowed := append([]string(nil), lists[role]...)
 	if len(allowed) == 0 {
@@ -877,15 +895,9 @@ func computeFreeze(root string) (Freeze, error) {
 
 func validateSystem(root string, state State) (Validation, FreezeStatus) {
 	var warnings []string
-	for _, rel := range requiredSystemFiles {
+	for _, rel := range requiredSystemFiles(state.Workspaces) {
 		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
 			warnings = append(warnings, fmt.Sprintf("missing required file: %s", rel))
-		}
-	}
-	for _, target := range implementationOpenSpecTargets {
-		rel := filepath.ToSlash(filepath.Join(target, "openspec", "config.yaml"))
-		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
-			warnings = append(warnings, fmt.Sprintf("missing implementation OpenSpec workspace: %s", rel))
 		}
 	}
 
@@ -918,29 +930,25 @@ func hashFile(path string) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func inferRole(root, dir string) string {
+func inferRole(root, dir string, workspaces []string) string {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return RoleDesign
 	}
 	rel, err := filepath.Rel(root, absDir)
-	if err != nil || rel == "." {
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return RoleDesign
 	}
 	parts := strings.Split(filepath.ToSlash(rel), "/")
-	if len(parts) >= 2 && parts[0] == "openspec" && parts[1] == "changes" {
-		return RoleChange
-	}
-	switch parts[0] {
-	case "frontend":
-		return RoleFrontend
-	case "backend":
-		return RoleBackend
-	case "system":
+	if parts[0] == "system" {
 		return RoleSystem
-	default:
-		return RoleDesign
 	}
+	for _, ws := range workspaces {
+		if parts[0] == ws {
+			return ws
+		}
+	}
+	return RoleDesign
 }
 
 func agentStatus(root string) AgentStatus {
