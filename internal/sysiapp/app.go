@@ -1,7 +1,6 @@
 package sysiapp
 
 import (
-	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -11,7 +10,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,11 +27,10 @@ const (
 )
 
 type Options struct {
-	Dir          string
-	Stdout       io.Writer
-	Stderr       io.Writer
-	OpenSpecPath string
-	WatchCount   int
+	Dir        string
+	Stdout     io.Writer
+	Stderr     io.Writer
+	WatchCount int
 }
 
 type App struct {
@@ -133,11 +130,6 @@ var controlledSystemFiles = []string{
 	"system/contracts/errors.md",
 	"system/security/model.md",
 	"system/data/schema.sql",
-}
-
-var implementationOpenSpecTargets = []string{
-	"frontend",
-	"backend",
 }
 
 //go:embed templates/agents/codex/*/SKILL.md templates/agents/codex/*/references/*.md templates/agents/cursor/sysi.mdc templates/agents/claude/CLAUDE.section.md
@@ -774,25 +766,6 @@ func containsString(values []string, want string) bool {
 	return false
 }
 
-func (a *App) requireImplementationOpenSpecDir(root string) (string, error) {
-	return "", errors.New("build changes require an implementation workspace")
-}
-
-func (a *App) ensureImplementationOpenSpec(root string) error {
-	for _, target := range implementationOpenSpecTargets {
-		if err := os.MkdirAll(filepath.Join(root, target), 0o755); err != nil {
-			return err
-		}
-		if exists(filepath.Join(root, target, "openspec", "config.yaml")) {
-			continue
-		}
-		if err := a.runOpenSpec(root, "init", target, "--tools", "none"); err != nil {
-			return fmt.Errorf("initialize OpenSpec for %s: %w", target, err)
-		}
-	}
-	return nil
-}
-
 func defaultAllowlists(workspaces []string) map[string][]string {
 	lists := map[string][]string{
 		RoleDesign: {"system/**"},
@@ -1029,30 +1002,6 @@ func hasFlag(args []string, flag string) bool {
 		}
 	}
 	return false
-}
-
-func (a *App) runOpenSpec(root string, args ...string) error {
-	bin := a.opts.OpenSpecPath
-	if bin == "" {
-		bin = os.Getenv("SYSI_OPENSPEC")
-	}
-	if bin == "" {
-		found, err := exec.LookPath("openspec")
-		if err != nil {
-			return errors.New("openspec executable not found")
-		}
-		bin = found
-	}
-	cmd := exec.CommandContext(context.Background(), bin, args...)
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Fprint(a.opts.Stdout, string(output))
-	}
-	if err != nil {
-		return fmt.Errorf("openspec %s failed: %w", strings.Join(args, " "), err)
-	}
-	return nil
 }
 
 func installCodex(root string) error {
