@@ -1,0 +1,104 @@
+package sysiapp
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func initBuildProject(t *testing.T, workspaces string) string {
+	t.Helper()
+	root := initProject(t, workspaces)
+	if code, out, errOut := runApp(t, root, "design", "freeze"); code != 0 {
+		t.Fatalf("design freeze failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	return root
+}
+
+func TestChangeProposeScaffoldsNativeChange(t *testing.T) {
+	root := initBuildProject(t, "api,web")
+	apiDir := filepath.Join(root, "api")
+
+	code, out, errOut := runApp(t, apiDir, "change", "propose", "add-login")
+	if code != 0 {
+		t.Fatalf("change propose failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+
+	base := filepath.Join(root, "api", "changes", "add-login")
+	for _, rel := range []string{"proposal.md", "design.md", "tasks.md", "meta.json"} {
+		if _, err := os.Stat(filepath.Join(base, rel)); err != nil {
+			t.Fatalf("expected %s to exist: %v", rel, err)
+		}
+	}
+
+	var meta ChangeMeta
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(base, "meta.json"))), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.Name != "add-login" || meta.Workspace != "api" || meta.Status != ChangeStatusProposed {
+		t.Fatalf("unexpected meta: %+v", meta)
+	}
+
+	proposal := readFile(t, filepath.Join(base, "proposal.md"))
+	assertContainsAll(t, "proposal.md", proposal, []string{
+		"# Change: add-login",
+		"## Why",
+		"## What Changes",
+		"## Foundation Alignment",
+		"sysi design-change",
+		"## Out Of Scope",
+	})
+	design := readFile(t, filepath.Join(base, "design.md"))
+	assertContainsAll(t, "design.md", design, []string{"## Decisions", "## Interfaces", "## Risks"})
+	tasks := readFile(t, filepath.Join(base, "tasks.md"))
+	assertContainsAll(t, "tasks.md", tasks, []string{"- [ ]", "/system"})
+}
+
+func TestChangeProposeGuardrails(t *testing.T) {
+	root := initBuildProject(t, "api,web")
+	apiDir := filepath.Join(root, "api")
+
+	// Outside any workspace: error names declared workspaces.
+	code, out, errOut := runApp(t, root, "change", "propose", "add-login")
+	if code == 0 {
+		t.Fatalf("propose at root should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	assertContainsAll(t, "outside-workspace error", out+errOut, []string{"api", "web"})
+
+	// Non-slug name fails.
+	if code, out, errOut := runApp(t, apiDir, "change", "propose", "Add Login"); code == 0 {
+		t.Fatalf("non-slug name should fail: stdout=%q stderr=%q", out, errOut)
+	}
+
+	// Duplicate fails.
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("first propose should succeed")
+	}
+	if code, out, errOut := runApp(t, apiDir, "change", "propose", "add-login"); code == 0 {
+		t.Fatalf("duplicate propose should fail: stdout=%q stderr=%q", out, errOut)
+	}
+
+	// Name colliding with an archived change fails.
+	archived := filepath.Join(root, "api", "changes", "archive", "2026-01-01-old-change")
+	if err := os.MkdirAll(archived, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := runApp(t, apiDir, "change", "propose", "old-change"); code == 0 {
+		t.Fatalf("propose colliding with archive should fail: stdout=%q stderr=%q", out, errOut)
+	}
+}
+
+func TestChangeProposeRequiresBuildPhase(t *testing.T) {
+	root := initProject(t, "api")
+	apiDir := filepath.Join(root, "api")
+
+	code, out, errOut := runApp(t, apiDir, "change", "propose", "add-login")
+	if code == 0 {
+		t.Fatalf("propose in design phase should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	if !strings.Contains(out+errOut, "build phase") {
+		t.Fatalf("error should mention build phase: stdout=%q stderr=%q", out, errOut)
+	}
+}

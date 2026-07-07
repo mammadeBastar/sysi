@@ -480,36 +480,23 @@ func (a *App) change(args []string) error {
 	if state.Phase != PhaseBuild {
 		return errors.New("build changes require build phase; run sysi design freeze first")
 	}
-	openSpecDir, err := a.requireImplementationOpenSpecDir(root)
+	workspace, err := currentWorkspace(root, a.opts.Dir, state.Workspaces)
 	if err != nil {
 		return err
 	}
 
 	action, name := args[0], args[1]
+	now := time.Now().UTC()
 	switch action {
 	case "propose":
-		if err := a.runOpenSpec(openSpecDir, "new", "change", name); err != nil {
-			return err
-		}
-		fmt.Fprintf(a.opts.Stdout, "OpenSpec change proposed: %s\n", name)
+		return a.changePropose(root, workspace, name, now)
 	case "apply":
-		if _, err := os.Stat(filepath.Join(openSpecDir, "openspec", "changes", name)); err != nil {
-			return fmt.Errorf("OpenSpec change %q not found", name)
-		}
-		if err := a.runOpenSpec(openSpecDir, "instructions", "apply", "--change", name, "--json"); err != nil {
-			return err
-		}
-		fmt.Fprintf(a.opts.Stdout, "OpenSpec apply instructions loaded for %s; continue implementation through OpenSpec apply and Superpowers discipline.\n", name)
+		return a.changeApply(root, workspace, name)
 	case "archive":
-		if err := a.runOpenSpec(openSpecDir, "archive", name); err != nil {
-			return err
-		}
-		fmt.Fprintf(a.opts.Stdout, "OpenSpec change archived: %s\n", name)
-		_, _ = a.buildStatus(root, state)
+		return a.changeArchive(root, workspace, name, now)
 	default:
 		return fmt.Errorf("unknown change command %q", action)
 	}
-	return nil
 }
 
 func (a *App) agent(args []string) error {
