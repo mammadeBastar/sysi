@@ -80,7 +80,7 @@ func describeChanges(changes []ChangeMeta) string {
 }
 
 func archivedNameCollision(root, workspace, name string) bool {
-	matches, err := filepath.Glob(filepath.Join(root, workspace, "changes", "archive", "*-"+name))
+	matches, err := filepath.Glob(filepath.Join(root, workspace, "changes", "archive", "????-??-??-"+name))
 	return err == nil && len(matches) > 0
 }
 
@@ -134,7 +134,10 @@ Work tasks in order. Check a task only after implementation and verification.
 `
 
 func (a *App) changePropose(root, workspace, name string, now time.Time) error {
-	if slugify(name) != name || name == "" {
+	if slugify(name) == "" {
+		return errors.New("change name must contain letters or digits")
+	}
+	if slugify(name) != name {
 		return fmt.Errorf("change name must be a lowercase slug (try %q)", slugify(name))
 	}
 	if name == "archive" {
@@ -150,21 +153,25 @@ func (a *App) changePropose(root, workspace, name string, now time.Time) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	date := now.Format("2006-01-02")
-	files := map[string]string{
-		"proposal.md": fmt.Sprintf(changeProposalTemplate, name, date, workspace),
-		"design.md":   fmt.Sprintf(changeDesignTemplate, name),
-		"tasks.md":    fmt.Sprintf(changeTasksTemplate, name),
+	cleanup := func(err error) error {
+		os.RemoveAll(dir)
+		return err
 	}
-	for rel, content := range files {
-		if err := os.WriteFile(filepath.Join(dir, rel), []byte(content), 0o644); err != nil {
-			return err
+	date := now.Format("2006-01-02")
+	files := []struct{ name, content string }{
+		{"proposal.md", fmt.Sprintf(changeProposalTemplate, name, date, workspace)},
+		{"design.md", fmt.Sprintf(changeDesignTemplate, name)},
+		{"tasks.md", fmt.Sprintf(changeTasksTemplate, name)},
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(dir, file.name), []byte(file.content), 0o644); err != nil {
+			return cleanup(err)
 		}
 	}
 	stamp := now.Format(time.RFC3339)
 	meta := ChangeMeta{Name: name, Workspace: workspace, Status: ChangeStatusProposed, CreatedAt: stamp, UpdatedAt: stamp}
 	if err := saveChangeMeta(root, workspace, name, meta); err != nil {
-		return err
+		return cleanup(err)
 	}
 	rel, err := filepath.Rel(root, dir)
 	if err != nil {

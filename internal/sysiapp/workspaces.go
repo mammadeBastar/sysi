@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var reservedWorkspaceNames = []string{"system", "docs", "openspec"}
+var reservedWorkspaceNames = []string{"system", "docs", "openspec", RoleDesign, RoleSystem}
 
 func parseWorkspacesFlag(args []string) ([]string, bool, error) {
 	var raw string

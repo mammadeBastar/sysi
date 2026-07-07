@@ -95,7 +95,7 @@ func TestInitScaffoldsDeclaredWorkspacesAndIsIdempotent(t *testing.T) {
 }
 
 func TestInitRejectsInvalidWorkspaceNames(t *testing.T) {
-	for _, invalid := range []string{"system", "Api", "a b", "-api", ""} {
+	for _, invalid := range []string{"system", "design", "system-maintainer", "Api", "a b", "-api", ""} {
 		t.Run(invalid, func(t *testing.T) {
 			root := t.TempDir()
 			code, out, errOut := runApp(t, root, "init", "--workspaces", "good,"+invalid)

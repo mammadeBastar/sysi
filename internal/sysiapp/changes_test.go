@@ -88,6 +88,20 @@ func TestChangeProposeGuardrails(t *testing.T) {
 	if code, out, errOut := runApp(t, apiDir, "change", "propose", "old-change"); code == 0 {
 		t.Fatalf("propose colliding with archive should fail: stdout=%q stderr=%q", out, errOut)
 	}
+
+	// An archived change whose name merely ends with the proposed name is not a collision.
+	unrelated := filepath.Join(root, "api", "changes", "archive", "2026-01-01-foo-suffix")
+	if err := os.MkdirAll(unrelated, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := runApp(t, apiDir, "change", "propose", "suffix"); code != 0 {
+		t.Fatalf("propose of suffix should not collide with 2026-01-01-foo-suffix: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+
+	// Reserved name fails.
+	if code, out, errOut := runApp(t, apiDir, "change", "propose", "archive"); code == 0 {
+		t.Fatalf("propose of reserved name archive should fail: stdout=%q stderr=%q", out, errOut)
+	}
 }
 
 func TestChangeProposeRequiresBuildPhase(t *testing.T) {
