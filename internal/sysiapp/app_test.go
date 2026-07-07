@@ -674,9 +674,11 @@ func TestCodexInstructionPacksContainOperationalGuardrails(t *testing.T) {
 			"system/data/db/indexes.md",
 		},
 		"sysi-apply": {
-			"OpenSpec",
+			"proposal.md",
+			"design.md",
+			"tasks.md",
+			"sysi change apply",
 			"Superpowers",
-			"openspec-apply-change",
 			"mandatory",
 			"missing prerequisite",
 			"frozen /system files",
@@ -686,6 +688,7 @@ func TestCodexInstructionPacksContainOperationalGuardrails(t *testing.T) {
 			"sysi-design-change",
 			"does not agree",
 			"system/security/**",
+			"declared workspace",
 		},
 		"sysi-design-change": {
 			"explicit user confirmation",
