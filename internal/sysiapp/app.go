@@ -923,15 +923,43 @@ func computeFreeze(root string) (Freeze, error) {
 }
 
 func validateSystem(root string, state State) (Validation, FreezeStatus) {
-	var warnings []string
+	warnings := []string{}
 	for _, rel := range requiredSystemFiles(state.Workspaces) {
 		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
 			warnings = append(warnings, fmt.Sprintf("missing required file: %s", rel))
 		}
 	}
 
+	for _, ws := range state.Workspaces {
+		if !exists(filepath.Join(root, ws)) {
+			warnings = append(warnings, fmt.Sprintf("missing workspace directory: %s", ws))
+			continue
+		}
+		entries, err := os.ReadDir(filepath.Join(root, ws, "changes"))
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Name() == "archive" {
+				continue
+			}
+			rel := filepath.ToSlash(filepath.Join(ws, "changes", entry.Name()))
+			var meta ChangeMeta
+			if err := loadJSON(filepath.Join(root, ws, "changes", entry.Name(), "meta.json"), &meta); err != nil {
+				warnings = append(warnings, fmt.Sprintf("change %s has missing or invalid meta.json", rel))
+				continue
+			}
+			if meta.Status != ChangeStatusProposed && meta.Status != ChangeStatusApplying {
+				warnings = append(warnings, fmt.Sprintf("change %s has invalid status %q", rel, meta.Status))
+			}
+			if archivedNameCollision(root, ws, entry.Name()) {
+				warnings = append(warnings, fmt.Sprintf("change %s collides with an archived change name", rel))
+			}
+		}
+	}
+
 	freeze := loadFreeze(root)
-	var mutations []string
+	mutations := []string{}
 	if state.Phase == PhaseBuild {
 		for rel, baseline := range freeze.Files {
 			sum, err := hashFile(filepath.Join(root, rel))

@@ -345,6 +345,53 @@ func TestValidateReportsMissingRequiredSystemFile(t *testing.T) {
 	}
 }
 
+func TestValidateReportsWorkspaceAndChangeProblems(t *testing.T) {
+	root := initProject(t, "api,web")
+	if code, _, _ := runApp(t, root, "design", "freeze"); code != 0 {
+		t.Fatal("freeze failed")
+	}
+	apiDir := filepath.Join(root, "api")
+	if code, _, _ := runApp(t, apiDir, "change", "propose", "add-login"); code != 0 {
+		t.Fatal("propose failed")
+	}
+
+	// Break things: remove a workspace dir, corrupt a meta.json, add a bogus status.
+	if err := os.RemoveAll(filepath.Join(root, "web")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "api", "changes", "add-login", "meta.json"), []byte("{broken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	badDir := filepath.Join(root, "api", "changes", "bad-status")
+	if err := os.MkdirAll(badDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	badMeta := `{"name":"bad-status","workspace":"api","status":"bogus","createdAt":"x","updatedAt":"x"}`
+	if err := os.WriteFile(filepath.Join(badDir, "meta.json"), []byte(badMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runApp(t, root, "validate")
+	if code == 0 {
+		t.Fatalf("validate should fail: stdout=%q stderr=%q", out, errOut)
+	}
+	assertContainsAll(t, "validate warnings", out+errOut, []string{
+		"missing workspace directory: web",
+		"api/changes/add-login",
+		"bad-status",
+	})
+}
+
+func TestStatusJSONEmitsEmptyWarningLists(t *testing.T) {
+	root := initProject(t, "api")
+
+	code, out, errOut := runApp(t, root, "status", "--json")
+	if code != 0 {
+		t.Fatalf("status json failed: code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	assertContainsAll(t, "empty lists", out, []string{`"warnings": []`, `"mutations": []`})
+}
+
 func TestDesignFreezeRecordsBaselineAndCaptureBlocksInBuild(t *testing.T) {
 	root := t.TempDir()
 	if code, out, errOut := runApp(t, root, "init", "--workspaces", "frontend,backend"); code != 0 {
